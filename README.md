@@ -42,22 +42,27 @@ Build:
 npm run build
 ```
 
-## V1 Status
+## V2 Status
 
-V1 implements a local TRIZ case inbox:
+V2 implements a local TRIZ contradiction analysis workspace:
 
 - Chinese mobile-first interface
 - Create, edit, delete, and search analysis cases
 - Local browser storage
-- Case completeness indicator
-- Basic problem-to-principle analysis path preview
+- Analysis progress stages
+- Technical and physical contradiction modeling
+- Improving/worsening parameter selection
+- Rule-based inventive principle recommendations
+- Problem-to-solution visual analysis map
 
-## Suggested First Version
+## Version Notes
 
-Start with V1: a local TRIZ case inbox.
+V1 started as a local TRIZ case inbox.
 
-This keeps the first version practical:
+V2 turns the inbox into a usable analysis workflow:
 
-- one place to collect problems,
-- one case list to revisit analysis,
-- one structured form to prepare later contradiction modeling and graph output.
+- capture the case,
+- identify the contradiction,
+- select inventive principles,
+- draft a solution hypothesis,
+- review the theory map.

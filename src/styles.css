@@ -30,7 +30,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(360px, 0.95fr) minmax(420px, 1.05fr);
+  grid-template-columns: minmax(360px, 0.78fr) minmax(520px, 1.22fr);
   min-height: 100vh;
 }
 
@@ -58,7 +58,13 @@ button {
 .primary-button,
 .ghost-button,
 .icon-button,
-.case-item-meta {
+.case-item-meta,
+.switch-row,
+.workflow,
+.workflow-step,
+.graph-node-wrap,
+.graph-arrow,
+.parameter-hints span {
   display: flex;
   align-items: center;
 }
@@ -128,6 +134,10 @@ h2 {
 .stat-card strong {
   color: #10211f;
   font-size: 1.55rem;
+}
+
+.stat-card span {
+  white-space: nowrap;
 }
 
 .capture-panel,
@@ -280,6 +290,11 @@ textarea {
   background: #d7ebe6;
 }
 
+.status-pill.model {
+  color: #58471b;
+  background: #f0e5bf;
+}
+
 .status-pill.done {
   color: #31503a;
   background: #dcebd7;
@@ -313,6 +328,51 @@ textarea {
   background: #1a6f66;
 }
 
+.workflow {
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.workflow-step {
+  flex: 1;
+  min-height: 58px;
+  gap: 9px;
+  border: 1px solid #cfddda;
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #6a7d79;
+}
+
+.workflow-step span {
+  display: inline-grid;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: #dbe6e3;
+  color: #526864;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.workflow-step strong {
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.workflow-step.active {
+  border-color: #89b9b1;
+  background: #ffffff;
+  color: #123c38;
+}
+
+.workflow-step.active span {
+  background: #0f4c45;
+  color: #ffffff;
+}
+
 .case-fields {
   display: grid;
   gap: 12px;
@@ -344,6 +404,128 @@ dd {
   gap: 10px;
 }
 
+.analysis-board,
+.principle-panel,
+.analysis-path {
+  margin-top: 24px;
+}
+
+.analysis-board,
+.principle-panel,
+.graph-card {
+  border: 1px solid #d5e2df;
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.switch-row {
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  background: #eef5f3;
+}
+
+.switch-option {
+  flex: 1;
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #526864;
+  font-weight: 900;
+}
+
+.switch-option.active {
+  background: #ffffff;
+  color: #0f4c45;
+  box-shadow: 0 1px 5px rgba(15, 76, 69, 0.13);
+}
+
+.parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.compact-textarea {
+  min-height: 82px;
+}
+
+.principle-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.principle-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 154px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+  background: #ffffff;
+  color: #142321;
+}
+
+.principle-card span {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef5f3;
+  color: #0f4c45;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.principle-card strong {
+  font-size: 0.98rem;
+}
+
+.principle-card small {
+  color: #607772;
+  line-height: 1.45;
+}
+
+.principle-card.selected {
+  border-color: #0f4c45;
+  box-shadow: inset 0 0 0 2px rgba(15, 76, 69, 0.15);
+}
+
+.graph-card {
+  overflow: hidden;
+}
+
+.graph-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.graph-node-wrap {
+  min-width: 0;
+  gap: 8px;
+}
+
+.graph-node-wrap .path-node {
+  flex: 1;
+}
+
+.graph-arrow {
+  justify-content: center;
+  flex: 0 0 24px;
+  color: #5d7470;
+}
+
 .path-node {
   min-height: 126px;
   border: 1px solid #cbdad7;
@@ -367,6 +549,28 @@ dd {
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
+}
+
+.parameter-hints {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.parameter-hints span {
+  gap: 8px;
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: #eef5f3;
+  color: #5b716d;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.parameter-hints strong {
+  color: #123c38;
 }
 
 .next-step {
@@ -406,6 +610,33 @@ dd {
     border-right: 0;
     border-bottom: 1px solid #dce6e3;
   }
+
+  .workflow,
+  .graph-flow {
+    align-items: stretch;
+  }
+
+  .workflow {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .graph-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-node-wrap {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .graph-arrow {
+    display: none;
+  }
+
+  .principle-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -416,7 +647,14 @@ dd {
 
   .stats-grid,
   .form-grid,
-  .path-map {
+  .path-map,
+  .parameter-grid,
+  .parameter-hints,
+  .principle-list {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow {
     grid-template-columns: 1fr;
   }
 
@@ -425,4 +663,3 @@ dd {
     gap: 6px;
   }
 }
-

@@ -20,6 +20,10 @@ Goal: convert a problem into a TRIZ contradiction model.
 - Improving/worsening parameter fields
 - Inventive principle recommendations
 - Contradiction cards
+- Analysis progress stages
+- Static theory analysis map
+
+Status: implemented in the local V2 app.
 
 ## V3: Visual Analysis Graph
 
@@ -49,4 +53,3 @@ Goal: turn one-off analysis into reusable knowledge.
 - Similar case search
 - Solution outcome records
 - Team case library
-
