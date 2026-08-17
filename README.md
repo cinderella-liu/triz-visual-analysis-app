@@ -29,6 +29,29 @@ Problem -> System Model -> Contradiction -> TRIZ Principle -> Solution Hypothesi
 - [Product Requirements](docs/TRIZ_VISUAL_ANALYSIS_APP_PRD.md)
 - [Roadmap](docs/ROADMAP.md)
 
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+## V1 Status
+
+V1 implements a local TRIZ case inbox:
+
+- Chinese mobile-first interface
+- Create, edit, delete, and search analysis cases
+- Local browser storage
+- Case completeness indicator
+- Basic problem-to-principle analysis path preview
+
 ## Suggested First Version
 
 Start with V1: a local TRIZ case inbox.
@@ -38,4 +61,3 @@ This keeps the first version practical:
 - one place to collect problems,
 - one case list to revisit analysis,
 - one structured form to prepare later contradiction modeling and graph output.
-

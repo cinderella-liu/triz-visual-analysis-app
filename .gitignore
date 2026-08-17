@@ -2,6 +2,7 @@
 build/
 dist/
 out/
+node_modules/
 *.apk
 *.aab
 
@@ -22,4 +23,6 @@ local.properties
 
 # Logs
 *.log
-
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
