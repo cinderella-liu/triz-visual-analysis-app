@@ -410,6 +410,7 @@ dd {
 .principle-panel,
 .decomposition-panel,
 .engine-panel,
+.diagnostic-panel,
 .contradiction-panel,
 .resource-panel,
 .possibility-panel,
@@ -421,6 +422,7 @@ dd {
 .principle-panel,
 .decomposition-panel,
 .engine-panel,
+.diagnostic-panel,
 .contradiction-panel,
 .resource-panel,
 .possibility-panel,
@@ -458,6 +460,33 @@ dd {
 
 .engine-grid strong {
   color: #10211f;
+  line-height: 1.45;
+}
+
+.diagnostic-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.diagnostic-card {
+  display: grid;
+  gap: 8px;
+  min-height: 126px;
+  border: 1px solid #d4cfae;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffdf4;
+}
+
+.diagnostic-card strong {
+  color: #3f3618;
+  line-height: 1.4;
+}
+
+.diagnostic-card span {
+  color: #766836;
+  font-size: 0.86rem;
   line-height: 1.45;
 }
 
@@ -650,7 +679,7 @@ dd {
 
 .solution-card dl div {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 82px 1fr;
   gap: 8px;
   border-top: 1px solid #e1ebe8;
   padding-top: 8px;
@@ -819,6 +848,7 @@ dd {
   }
 
   .decomposition-grid,
+  .diagnostic-list,
   .resource-grid,
   .solution-grid,
   .engine-grid {
@@ -839,6 +869,7 @@ dd {
   .parameter-hints,
   .principle-list,
   .decomposition-grid,
+  .diagnostic-list,
   .resource-grid,
   .solution-grid,
   .engine-grid {

@@ -81,6 +81,15 @@ type SolutionConcept = {
   risk: string;
   impact: number;
   effort: number;
+  partsToChange?: string[];
+  implementationSteps?: string[];
+  metrics?: string[];
+  decisionGate?: string;
+};
+
+type DiagnosticQuestion = {
+  question: string;
+  example: string;
 };
 
 const storageKey = "triz.visual.analysis.cases.v2";
@@ -424,13 +433,168 @@ function buildResourceInventory(item: TrizCase): ResourceItem[] {
   ];
 }
 
+function inferProblemFocus(item: TrizCase) {
+  const text = [item.description, item.goal, item.constraint, item.domain, item.systemName]
+    .join(" ")
+    .toLowerCase();
+  const signals = [item.improvingParameter, item.worseningParameter, text];
+
+  if (signals.some((value) => String(value).includes("energy") || String(value).includes("续航") || String(value).includes("电池") || String(value).includes("功耗"))) {
+    return "energy";
+  }
+  if (signals.some((value) => String(value).includes("speed") || String(value).includes("速度") || String(value).includes("响应") || String(value).includes("延迟"))) {
+    return "speed";
+  }
+  if (signals.some((value) => String(value).includes("accuracy") || String(value).includes("精度") || String(value).includes("识别") || String(value).includes("误差"))) {
+    return "accuracy";
+  }
+  if (signals.some((value) => String(value).includes("reliability") || String(value).includes("可靠") || String(value).includes("故障") || String(value).includes("稳定"))) {
+    return "reliability";
+  }
+  if (signals.some((value) => String(value).includes("size") || String(value).includes("weight") || String(value).includes("体积") || String(value).includes("重量") || String(value).includes("厚度"))) {
+    return "structure";
+  }
+  if (signals.some((value) => String(value).includes("cost") || String(value).includes("成本") || String(value).includes("预算"))) {
+    return "cost";
+  }
+  return "general";
+}
+
+function buildConcreteParts(item: TrizCase, principle: string) {
+  const system = item.systemName || "当前系统";
+  const focus = inferProblemFocus(item);
+  const common = [`${system}的关键功能模块`, "采集/反馈信号", "控制策略或工作流程"];
+
+  if (focus === "energy") return ["耗能最高的模块", "电源/电池/供能路径", "后台任务和待机策略"];
+  if (focus === "speed") return ["关键路径步骤", "缓存或预处理模块", "等待/排队环节"];
+  if (focus === "accuracy") return ["传感或输入数据", "校准规则", "误差检测与复核流程"];
+  if (focus === "reliability") return ["高故障部件", "冗余或降级路径", "异常检测和恢复机制"];
+  if (focus === "structure") return ["占空间/重量最大的部件", "承力或支撑结构", "可分层或可折叠区域"];
+  if (focus === "cost") return ["高成本物料/工序", "可复用标准件", "人工维护步骤"];
+  if (principle.includes("反馈")) return ["状态采集点", "判断阈值", "自动纠偏动作"];
+  return common;
+}
+
+function buildConcreteSteps(item: TrizCase, conceptTitle: string) {
+  const system = item.systemName || "当前系统";
+  const goal = item.goal || "目标指标";
+  const constraint = item.constraint || "副作用指标";
+  const focus = inferProblemFocus(item);
+
+  if (focus === "energy") {
+    return [
+      `列出${system}在典型使用场景下的前三个耗能来源。`,
+      "把每个耗能来源拆成可关闭、可降频、可延后、可替代四类动作。",
+      `先做一个只影响单一场景的原型，比较「${goal}」和「${constraint}」的变化。`,
+    ];
+  }
+  if (focus === "speed") {
+    return [
+      "画出从输入到输出的关键路径，标出等待时间最长的步骤。",
+      "把可预处理、可缓存、可并行的步骤移出主路径。",
+      "用同一批测试样本测量改造前后的 P50/P95 响应时间。",
+    ];
+  }
+  if (focus === "accuracy") {
+    return [
+      "先定义错误类型：误识别、漏识别、漂移、噪声还是人工判断不一致。",
+      "增加校准样本、二次判断或反馈复核机制。",
+      "用固定测试集比较准确率、误报率、漏报率和人工修正次数。",
+    ];
+  }
+  if (focus === "reliability") {
+    return [
+      "找出最常发生故障的部件、状态或操作步骤。",
+      "增加检测点、降级路径或自恢复动作。",
+      "用压力测试和异常注入验证故障率、恢复时间和用户影响范围。",
+    ];
+  }
+  if (focus === "structure") {
+    return [
+      "把空间、重量或厚度贡献最大的部件列成清单。",
+      "尝试分层、折叠、复合材料、共用结构或功能转移。",
+      "用体积/重量/强度/散热四类指标判断是否值得进入样机。",
+    ];
+  }
+  if (focus === "cost") {
+    return [
+      "拆出 BOM、工时、维护、返修和培训五类成本。",
+      "优先替换高成本低差异化环节，而不是削弱核心性能。",
+      "用单件成本、返工率和交付周期判断方案是否成立。",
+    ];
+  }
+
+  return [
+    `把「${conceptTitle}」拆成一个可改造对象、一个控制动作和一个反馈指标。`,
+    `先只改${system}的一个局部，避免一次性改变整个系统。`,
+    `验证「${goal}」是否提升，同时确认「${constraint}」没有明显恶化。`,
+  ];
+}
+
+function buildConcreteMetrics(item: TrizCase) {
+  const improving = knownParameterName(item.improvingParameter, item.goal || "目标指标");
+  const worsening = knownParameterName(item.worseningParameter, item.constraint || "副作用指标");
+  const focus = inferProblemFocus(item);
+
+  if (focus === "energy") return ["单位任务耗电量", "连续使用时长", "峰值功耗", "温升"];
+  if (focus === "speed") return ["平均响应时间", "P95 延迟", "吞吐量", "失败重试次数"];
+  if (focus === "accuracy") return ["准确率", "误报率", "漏报率", "人工修正次数"];
+  if (focus === "reliability") return ["故障率", "平均恢复时间", "异常覆盖率", "降级成功率"];
+  if (focus === "structure") return ["体积", "重量", "强度", "散热余量"];
+  if (focus === "cost") return ["单件成本", "工时", "返工率", "维护成本"];
+  return [improving, worsening, "新增复杂度", "用户可感知收益"];
+}
+
+function buildDecisionGate(item: TrizCase, concept: Pick<SolutionConcept, "impact" | "effort">) {
+  const goal = item.goal || knownParameterName(item.improvingParameter, "目标指标");
+  const constraint = item.constraint || knownParameterName(item.worseningParameter, "约束指标");
+  const expectedLift = concept.impact >= 5 ? "20%" : "10%";
+  const allowedCost = concept.effort >= 4 ? "5%" : "10%";
+  return `进入下一轮的条件：${goal}至少改善 ${expectedLift}，同时${constraint}恶化不超过 ${allowedCost}。`;
+}
+
+function completeConcept(concept: SolutionConcept, item: TrizCase): SolutionConcept {
+  return {
+    ...concept,
+    partsToChange: buildConcreteParts(item, concept.principle),
+    implementationSteps: buildConcreteSteps(item, concept.title),
+    metrics: buildConcreteMetrics(item),
+    decisionGate: buildDecisionGate(item, concept),
+  };
+}
+
+function buildDiagnosticQuestions(item: TrizCase): DiagnosticQuestion[] {
+  const system = item.systemName || "这个系统";
+  const questions: DiagnosticQuestion[] = [];
+
+  if (!item.systemName) {
+    questions.push({ question: "这个问题发生在哪个具体系统或部件上？", example: "例如：手机电池、散热结构、识别算法、装配工位" });
+  }
+  if (!item.goal) {
+    questions.push({ question: "你希望改善的指标是什么？", example: "例如：续航提升 20%、误报率降低到 1%、响应时间小于 300ms" });
+  }
+  if (!item.constraint) {
+    questions.push({ question: "不能牺牲什么？", example: "例如：不能增加厚度、不能提高成本、不能降低安全性" });
+  }
+  questions.push({
+    question: `${system}现在最失败的表现是什么？`,
+    example: "例如：温升过高、寿命不足、误识别、用户等待太久、维护成本高",
+  });
+  questions.push({
+    question: "你能接受的第一轮实验成本是多少？",
+    example: "例如：只做软件策略验证、3D 打印样件、单台设备 A/B 测试",
+  });
+
+  return questions.slice(0, 5);
+}
+
 function buildSolutionConcepts(item: TrizCase, activePrinciples: Principle[]): SolutionConcept[] {
   const system = item.systemName || "当前系统";
   const goal = item.goal || "改善目标";
   const constraint = item.constraint || knownParameterName(item.worseningParameter, "副作用");
   const chosen = activePrinciples.length ? activePrinciples : recommendPrinciples(item).slice(0, 3);
 
-  return chosen.slice(0, 4).map((principle, index) => {
+  const baseConcepts = chosen.slice(0, 4).map((principle, index) => {
     if (principle.id === 23) {
       return {
         title: "反馈闭环控制方案",
@@ -503,6 +667,8 @@ function buildSolutionConcepts(item: TrizCase, activePrinciples: Principle[]): S
       effort: 2 + index,
     };
   });
+
+  return baseConcepts.map((concept) => completeConcept(concept, item));
 }
 
 function buildDecisionSummary(concepts: SolutionConcept[]) {
@@ -549,7 +715,16 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
     "五、方案候选",
     ...concepts.map(
       (concept, index) =>
-        `${index + 1}. ${concept.title}（${concept.principle}）：${concept.mechanism} 工程动作：${concept.engineeringMove} 验证：${concept.validation} 风险：${concept.risk}`,
+        [
+          `${index + 1}. ${concept.title}（${concept.principle}）：${concept.mechanism}`,
+          `   - 改造对象：${concept.partsToChange?.join("、")}`,
+          `   - 工程动作：${concept.engineeringMove}`,
+          `   - 实施步骤：${concept.implementationSteps?.join("；")}`,
+          `   - 验证指标：${concept.metrics?.join("、")}`,
+          `   - 验证实验：${concept.validation}`,
+          `   - 风险：${concept.risk}`,
+          `   - 判定门槛：${concept.decisionGate}`,
+        ].join("\n"),
     ),
     "",
     "六、验证路径",
@@ -613,6 +788,7 @@ export function App() {
   const resources = selectedCase ? buildResourceInventory(selectedCase) : [];
   const solutionConcepts = selectedCase ? buildSolutionConcepts(selectedCase, activePrinciples) : [];
   const decisionSummary = buildDecisionSummary(solutionConcepts);
+  const diagnosticQuestions = selectedCase ? buildDiagnosticQuestions(selectedCase) : [];
 
   function updateCases(nextCases: TrizCase[]) {
     setCases(nextCases);
@@ -711,7 +887,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V2 可视化分析工具</p>
+            <p className="eyebrow">TRIZ V3 工程方案生成器</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -827,6 +1003,21 @@ export function App() {
                 <Sparkles size={18} />
                 一键分析工程问题
               </button>
+            </section>
+
+            <section className="diagnostic-panel">
+              <div className="section-title">
+                <Search size={19} />
+                <h2>让方案变具体的追问</h2>
+              </div>
+              <div className="diagnostic-list">
+                {diagnosticQuestions.map((item) => (
+                  <article className="diagnostic-card" key={item.question}>
+                    <strong>{item.question}</strong>
+                    <span>{item.example}</span>
+                  </article>
+                ))}
+              </div>
             </section>
 
             <section className="decomposition-panel">
@@ -988,16 +1179,32 @@ export function App() {
                     <p>{concept.mechanism}</p>
                     <dl>
                       <div>
+                        <dt>改造对象</dt>
+                        <dd>{concept.partsToChange?.join("、")}</dd>
+                      </div>
+                      <div>
                         <dt>工程动作</dt>
                         <dd>{concept.engineeringMove}</dd>
+                      </div>
+                      <div>
+                        <dt>实施步骤</dt>
+                        <dd>{concept.implementationSteps?.join("；")}</dd>
                       </div>
                       <div>
                         <dt>验证实验</dt>
                         <dd>{concept.validation}</dd>
                       </div>
                       <div>
+                        <dt>验证指标</dt>
+                        <dd>{concept.metrics?.join("、")}</dd>
+                      </div>
+                      <div>
                         <dt>风险</dt>
                         <dd>{concept.risk}</dd>
+                      </div>
+                      <div>
+                        <dt>判定门槛</dt>
+                        <dd>{concept.decisionGate}</dd>
                       </div>
                     </dl>
                     <div className="score-row">
