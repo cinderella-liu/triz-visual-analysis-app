@@ -1,6 +1,7 @@
 import {
   Archive,
   ArrowRight,
+  AlertTriangle,
   BookOpen,
   BrainCircuit,
   Check,
@@ -8,12 +9,14 @@ import {
   Clock3,
   FileText,
   GitBranch,
+  Layers3,
   Lightbulb,
   Pencil,
   Save,
   Search,
   Sparkles,
   Trash2,
+  Wrench,
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -54,6 +57,30 @@ type Principle = {
   summary: string;
   action: string;
   tags: string[];
+};
+
+type ContradictionCandidate = {
+  type: ContradictionType;
+  title: string;
+  statement: string;
+  why: string;
+};
+
+type ResourceItem = {
+  category: string;
+  resource: string;
+  move: string;
+};
+
+type SolutionConcept = {
+  title: string;
+  principle: string;
+  mechanism: string;
+  engineeringMove: string;
+  validation: string;
+  risk: string;
+  impact: number;
+  effort: number;
 };
 
 const storageKey = "triz.visual.analysis.cases.v2";
@@ -332,23 +359,157 @@ function buildProblemBreakdown(item: TrizCase) {
   ];
 }
 
-function buildPossibilities(item: TrizCase, activePrinciples: Principle[]) {
-  const system = item.systemName || "系统";
+function buildContradictionCandidates(item: TrizCase): ContradictionCandidate[] {
+  const system = item.systemName || "当前系统";
+  const goal = item.goal || "目标效果";
+  const constraint = item.constraint || knownParameterName(item.worseningParameter, "约束条件");
+  const improving = knownParameterName(item.improvingParameter, goal);
+  const worsening = knownParameterName(item.worseningParameter, constraint);
+
+  return [
+    {
+      type: "技术矛盾",
+      title: "性能提升 vs 副作用增加",
+      statement: `为了提升「${improving}」，${system}通常会增加结构、能量、流程或控制强度，但这会恶化「${worsening}」。`,
+      why: "这是最常见的工程矛盾，适合用发明原理寻找非折中路径。",
+    },
+    {
+      type: "物理矛盾",
+      title: "同一对象需要相反状态",
+      statement:
+        item.physicalContradiction ||
+        `${system}在完成「${goal}」时需要更强/更多/更快，但在满足「${constraint}」时又需要更轻/更少/更稳。`,
+      why: "物理矛盾适合用空间分离、时间分离、条件分离或整体/部分分离。",
+    },
+    {
+      type: "技术矛盾",
+      title: "自动化提升 vs 可控性下降",
+      statement: `如果让${system}更自动地达成「${goal}」，可能带来调试困难、误判或用户不可理解，从而影响「${constraint}」。`,
+      why: "很多软件、硬件和流程系统的问题，本质是控制闭环不足，而不是功能数量不足。",
+    },
+  ];
+}
+
+function buildResourceInventory(item: TrizCase): ResourceItem[] {
+  const system = item.systemName || "当前系统";
+  const goal = item.goal || "目标效果";
+  const constraint = item.constraint || "关键约束";
+
+  return [
+    {
+      category: "结构资源",
+      resource: `${system}已有部件、模块、接口、支撑结构`,
+      move: `优先复用已有结构承载「${goal}」，避免新增部件直接冲击「${constraint}」。`,
+    },
+    {
+      category: "时间资源",
+      resource: "空闲时段、启动前、运行间隙、低负载窗口",
+      move: "把高成本动作前置、分批或按需触发，减少峰值压力。",
+    },
+    {
+      category: "空间资源",
+      resource: "未使用空间、边缘区域、可分层区域、远端/云端位置",
+      move: "把冲突功能放到不同空间位置，降低同一区域内的竞争。",
+    },
+    {
+      category: "信息资源",
+      resource: "传感数据、日志、用户反馈、阈值、历史模式",
+      move: "建立反馈闭环，让系统根据真实状态调整策略，而不是固定动作。",
+    },
+    {
+      category: "场与材料资源",
+      resource: "电、热、光、声、磁、软件模型、复合材料",
+      move: "考虑用信息流、场效应或复合结构替代高代价机械/人工动作。",
+    },
+  ];
+}
+
+function buildSolutionConcepts(item: TrizCase, activePrinciples: Principle[]): SolutionConcept[] {
+  const system = item.systemName || "当前系统";
   const goal = item.goal || "改善目标";
   const constraint = item.constraint || knownParameterName(item.worseningParameter, "副作用");
+  const chosen = activePrinciples.length ? activePrinciples : recommendPrinciples(item).slice(0, 3);
 
-  return activePrinciples.map((principle) => {
+  return chosen.slice(0, 4).map((principle, index) => {
+    if (principle.id === 23) {
+      return {
+        title: "反馈闭环控制方案",
+        principle: `${principle.id}. ${principle.name}`,
+        mechanism: `给${system}增加状态采集、结果判断和纠偏规则，让系统按真实反馈接近「${goal}」。`,
+        engineeringMove: "定义输入信号、阈值、异常状态和自动修正动作，形成最小闭环。",
+        validation: `对比有/无反馈闭环时「${goal}」的提升幅度，并记录「${constraint}」是否恶化。`,
+        risk: "反馈信号不准会导致误调节，需要先做日志和人工复核。",
+        impact: 5,
+        effort: 3,
+      };
+    }
+    if (principle.id === 15 || principle.id === 35) {
+      return {
+        title: "动态参数切换方案",
+        principle: `${principle.id}. ${principle.name}`,
+        mechanism: `把${system}的固定参数改成多档位或自适应策略，在不同场景下分别优化「${goal}」和「${constraint}」。`,
+        engineeringMove: "列出高负载、低负载、异常、人工接管四类场景，并为每类配置不同策略。",
+        validation: "做场景 A/B 测试，观察目标指标、副作用指标和切换稳定性。",
+        risk: "规则过多会增加维护复杂度，需要限制首版策略数量。",
+        impact: 4,
+        effort: 3,
+      };
+    }
     if (principle.id === 28) {
-      return `用「${principle.name}」把${system}的一部分硬件负担转移到算法、传感或信息流，先降低物理代价，再提升「${goal}」。`;
+      return {
+        title: "信息替代物理负担方案",
+        principle: `${principle.id}. ${principle.name}`,
+        mechanism: `把${system}中成本高、体积大或动作慢的部分转移到算法、传感、预测或软件控制。`,
+        engineeringMove: "找出最重/最慢/最贵的环节，判断哪些可以用模型预测、软件补偿或远端处理替代。",
+        validation: "用模拟数据或小样机验证替代后是否仍能达到核心性能。",
+        risk: "算法替代会引入误差边界，需要定义失败保护策略。",
+        impact: 5,
+        effort: 4,
+      };
     }
-    if (principle.id === 35) {
-      return `用「${principle.name}」把固定参数改成动态参数，让${system}在不同场景下采用不同策略，减少「${constraint}」的副作用。`;
+    if (principle.id === 1 || principle.id === 3) {
+      return {
+        title: "分区分层优化方案",
+        principle: `${principle.id}. ${principle.name}`,
+        mechanism: `把${system}拆成关键区和非关键区，只在真正影响「${goal}」的位置投入增强。`,
+        engineeringMove: "画出功能模块图，标记高价值节点、瓶颈节点和可降级节点。",
+        validation: "先优化一个关键节点，验证整体指标是否改善，再决定是否扩展。",
+        risk: "拆分边界错误会造成局部优化、整体无效。",
+        impact: 4,
+        effort: 2,
+      };
     }
-    if (principle.id === 40) {
-      return `用「${principle.name}」组合材料、模块或能力，让不同部分分别承担性能、成本和稳定性要求。`;
+    if (principle.id === 10 || principle.id === 19) {
+      return {
+        title: "预处理与节奏化方案",
+        principle: `${principle.id}. ${principle.name}`,
+        mechanism: `把${system}的高成本动作提前准备、批量处理或周期触发，减少实时运行压力。`,
+        engineeringMove: "识别可以预计算、预装配、预校验或批处理的步骤，并把它们移出关键路径。",
+        validation: "测量关键路径耗时、峰值资源占用和异常恢复时间。",
+        risk: "预处理结果可能过期，需要设置刷新条件。",
+        impact: 3,
+        effort: 2,
+      };
     }
-    return `用「${principle.name}」：${principle.action}，形成一个不直接牺牲「${constraint}」的替代路径。`;
+
+    return {
+      title: `${principle.name}驱动方案`,
+      principle: `${principle.id}. ${principle.name}`,
+      mechanism: `${principle.action}，让${system}绕开「${constraint}」对「${goal}」的限制。`,
+      engineeringMove: "把该原理转成一个可画图、可做样机、可测指标的设计动作。",
+      validation: "做最小实验，比较目标指标和副作用指标的变化。",
+      risk: "原理转译可能过宽，需要用真实指标收敛。",
+      impact: Math.max(3, 5 - index),
+      effort: 2 + index,
+    };
   });
+}
+
+function buildDecisionSummary(concepts: SolutionConcept[]) {
+  const ranked = [...concepts].sort((a, b) => b.impact - b.effort - (a.impact - a.effort));
+  const best = ranked[0];
+  if (!best) return "先补充矛盾参数，系统会生成可比较的方案候选。";
+  return `优先验证「${best.title}」：收益/代价比最高，适合作为第一轮工程实验。`;
 }
 
 function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
@@ -359,7 +520,9 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
       ? `希望改善「${improving}」，但可能恶化「${worsening}」。`
       : item.physicalContradiction || `同一系统同时需要满足互相冲突的状态。`;
   const breakdown = buildProblemBreakdown(item);
-  const possibilities = buildPossibilities(item, activePrinciples);
+  const contradictionCandidates = buildContradictionCandidates(item);
+  const resources = buildResourceInventory(item);
+  const concepts = buildSolutionConcepts(item, activePrinciples);
   const principleLines = activePrinciples.map(
     (principle, index) => `${index + 1}. ${principle.name}：${principle.action}`,
   );
@@ -375,17 +538,25 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
     `- 技术矛盾：${contradiction}`,
     `- 物理矛盾：${item.physicalContradiction || `系统既要提升「${improving}」，又不能付出「${worsening}」代价。`}`,
     `- TRIZ 关键问法：怎样让「${improving}」变好，同时不让「${worsening}」变差？`,
+    ...contradictionCandidates.map((candidate, index) => `- 候选 ${index + 1}（${candidate.type}）：${candidate.statement} ${candidate.why}`),
     "",
-    "三、可用发明原理",
+    "三、资源盘点",
+    ...resources.map((resource) => `- ${resource.category}：${resource.resource}。${resource.move}`),
+    "",
+    "四、可用发明原理",
     ...principleLines,
     "",
-    "四、可能方案",
-    ...possibilities.map((possibility, index) => `${index + 1}. ${possibility}`),
+    "五、方案候选",
+    ...concepts.map(
+      (concept, index) =>
+        `${index + 1}. ${concept.title}（${concept.principle}）：${concept.mechanism} 工程动作：${concept.engineeringMove} 验证：${concept.validation} 风险：${concept.risk}`,
+    ),
     "",
-    "五、验证路径",
+    "六、验证路径",
     `- 目标指标：验证「${improving}」是否显著改善。`,
     `- 副作用指标：验证「${worsening}」是否没有明显恶化。`,
     "- 最小实验：先做一个低成本原型或流程模拟，用前后对比数据判断方案是否值得继续。",
+    `- 首选实验：${buildDecisionSummary(concepts)}`,
     "- 决策标准：只有当目标收益大于新增复杂度、成本和风险时，才进入下一轮方案深化。",
   ].join("\n");
 }
@@ -437,7 +608,11 @@ export function App() {
     ? principles.filter((principle) => selectedCase.selectedPrincipleIds.includes(principle.id))
     : [];
   const breakdown = selectedCase ? buildProblemBreakdown(selectedCase) : [];
-  const possibilities = selectedCase ? buildPossibilities(selectedCase, selectedPrinciples.length ? selectedPrinciples : recommended.slice(0, 3)) : [];
+  const activePrinciples = selectedPrinciples.length ? selectedPrinciples : recommended.slice(0, 3);
+  const contradictionCandidates = selectedCase ? buildContradictionCandidates(selectedCase) : [];
+  const resources = selectedCase ? buildResourceInventory(selectedCase) : [];
+  const solutionConcepts = selectedCase ? buildSolutionConcepts(selectedCase, activePrinciples) : [];
+  const decisionSummary = buildDecisionSummary(solutionConcepts);
 
   function updateCases(nextCases: TrizCase[]) {
     setCases(nextCases);
@@ -524,7 +699,6 @@ export function App() {
 
   function handleGeneratePlan() {
     if (!selectedCase) return;
-    const activePrinciples = selectedPrinciples.length ? selectedPrinciples : recommended.slice(0, 3);
     updateCase({
       ...selectedCase,
       selectedPrincipleIds: activePrinciples.map((principle) => principle.id),
@@ -634,6 +808,27 @@ export function App() {
 
             <WorkflowSteps status={selectedCase.status} />
 
+            <section className="engine-panel">
+              <div className="section-title">
+                <BrainCircuit size={19} />
+                <h2>TRIZ 分析引擎</h2>
+              </div>
+              <div className="engine-grid">
+                <div>
+                  <span>当前判断</span>
+                  <strong>{decisionSummary}</strong>
+                </div>
+                <div>
+                  <span>分析输出</span>
+                  <strong>矛盾候选 + 资源盘点 + 方案候选 + 验证实验</strong>
+                </div>
+              </div>
+              <button className="primary-button full-width" type="button" onClick={handleGeneratePlan}>
+                <Sparkles size={18} />
+                一键分析工程问题
+              </button>
+            </section>
+
             <section className="decomposition-panel">
               <div className="section-title">
                 <FileText size={19} />
@@ -711,6 +906,39 @@ export function App() {
               </label>
             </section>
 
+            <section className="contradiction-panel">
+              <div className="section-title">
+                <AlertTriangle size={19} />
+                <h2>矛盾候选</h2>
+              </div>
+              <div className="contradiction-list">
+                {contradictionCandidates.map((candidate) => (
+                  <article className="contradiction-card" key={candidate.title}>
+                    <span>{candidate.type}</span>
+                    <strong>{candidate.title}</strong>
+                    <p>{candidate.statement}</p>
+                    <small>{candidate.why}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="resource-panel">
+              <div className="section-title">
+                <Layers3 size={19} />
+                <h2>资源盘点</h2>
+              </div>
+              <div className="resource-grid">
+                {resources.map((resource) => (
+                  <article className="resource-card" key={resource.category}>
+                    <span>{resource.category}</span>
+                    <strong>{resource.resource}</strong>
+                    <p>{resource.move}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="principle-panel">
               <div className="section-title">
                 <Sparkles size={19} />
@@ -747,12 +975,36 @@ export function App() {
 
             <section className="possibility-panel">
               <div className="section-title">
-                <Lightbulb size={19} />
-                <h2>可能性分析</h2>
+                <Wrench size={19} />
+                <h2>方案候选</h2>
               </div>
-              <div className="possibility-list">
-                {possibilities.map((possibility) => (
-                  <p key={possibility}>{possibility}</p>
+              <div className="solution-grid">
+                {solutionConcepts.map((concept) => (
+                  <article className="solution-card" key={concept.title}>
+                    <div className="solution-head">
+                      <span>{concept.principle}</span>
+                      <strong>{concept.title}</strong>
+                    </div>
+                    <p>{concept.mechanism}</p>
+                    <dl>
+                      <div>
+                        <dt>工程动作</dt>
+                        <dd>{concept.engineeringMove}</dd>
+                      </div>
+                      <div>
+                        <dt>验证实验</dt>
+                        <dd>{concept.validation}</dd>
+                      </div>
+                      <div>
+                        <dt>风险</dt>
+                        <dd>{concept.risk}</dd>
+                      </div>
+                    </dl>
+                    <div className="score-row">
+                      <span>收益 {concept.impact}/5</span>
+                      <span>难度 {concept.effort}/5</span>
+                    </div>
+                  </article>
                 ))}
               </div>
             </section>
@@ -767,7 +1019,7 @@ export function App() {
 
             <section className="next-step">
               <Lightbulb size={20} />
-              <p>{selectedPrinciples[0]?.action ?? "先选择矛盾参数，系统会给出可转化为方案的 TRIZ 发明原理。"}</p>
+              <p>{decisionSummary}</p>
             </section>
           </>
         ) : (

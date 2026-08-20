@@ -64,6 +64,8 @@ button {
 .workflow-step,
 .graph-node-wrap,
 .graph-arrow,
+.solution-head,
+.score-row,
 .parameter-hints span {
   display: flex;
   align-items: center;
@@ -407,6 +409,9 @@ dd {
 .analysis-board,
 .principle-panel,
 .decomposition-panel,
+.engine-panel,
+.contradiction-panel,
+.resource-panel,
 .possibility-panel,
 .analysis-path {
   margin-top: 24px;
@@ -415,12 +420,45 @@ dd {
 .analysis-board,
 .principle-panel,
 .decomposition-panel,
+.engine-panel,
+.contradiction-panel,
+.resource-panel,
 .possibility-panel,
 .graph-card {
   border: 1px solid #d5e2df;
   border-radius: 8px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.engine-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 10px;
+}
+
+.engine-grid div {
+  display: grid;
+  gap: 8px;
+  min-height: 92px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+}
+
+.engine-grid span,
+.contradiction-card span,
+.resource-card span,
+.solution-head span {
+  color: #607772;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.engine-grid strong {
+  color: #10211f;
+  line-height: 1.45;
 }
 
 .decomposition-grid {
@@ -453,6 +491,48 @@ dd {
 .decomposition-card small {
   color: #607772;
   line-height: 1.45;
+}
+
+.contradiction-list {
+  display: grid;
+  gap: 10px;
+}
+
+.contradiction-card,
+.resource-card,
+.solution-card {
+  display: grid;
+  gap: 9px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+}
+
+.contradiction-card strong,
+.resource-card strong,
+.solution-card strong {
+  color: #10211f;
+  line-height: 1.35;
+}
+
+.contradiction-card p,
+.resource-card p,
+.solution-card p {
+  margin: 0;
+  color: #263b38;
+  line-height: 1.55;
+}
+
+.contradiction-card small {
+  color: #607772;
+  line-height: 1.45;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .switch-row {
@@ -508,21 +588,6 @@ dd {
   line-height: 1.55;
 }
 
-.possibility-list {
-  display: grid;
-  gap: 10px;
-}
-
-.possibility-list p {
-  margin: 0;
-  border: 1px solid #d4dfdc;
-  border-radius: 8px;
-  padding: 12px;
-  background: #ffffff;
-  color: #1f3431;
-  line-height: 1.55;
-}
-
 .principle-card {
   display: grid;
   align-content: start;
@@ -560,6 +625,60 @@ dd {
 .principle-card.selected {
   border-color: #0f4c45;
   box-shadow: inset 0 0 0 2px rgba(15, 76, 69, 0.15);
+}
+
+.solution-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.solution-card {
+  align-content: start;
+}
+
+.solution-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.solution-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.solution-card dl div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  border-top: 1px solid #e1ebe8;
+  padding-top: 8px;
+}
+
+.solution-card dt {
+  font-size: 0.82rem;
+}
+
+.solution-card dd {
+  color: #334844;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.score-row {
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.score-row span {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: #eef5f3;
+  color: #174c46;
+  font-size: 0.82rem;
+  font-weight: 900;
 }
 
 .graph-card {
@@ -699,7 +818,10 @@ dd {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .decomposition-grid {
+  .decomposition-grid,
+  .resource-grid,
+  .solution-grid,
+  .engine-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -716,7 +838,10 @@ dd {
   .parameter-grid,
   .parameter-hints,
   .principle-list,
-  .decomposition-grid {
+  .decomposition-grid,
+  .resource-grid,
+  .solution-grid,
+  .engine-grid {
     grid-template-columns: 1fr;
   }
 
