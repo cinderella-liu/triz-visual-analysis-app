@@ -234,6 +234,26 @@ const seedCases: TrizCase[] = [
     knowledgeNotes: "",
     updatedAt: new Date().toISOString(),
   },
+  {
+    id: "seed-inertial-precision",
+    title: "惯性系统精度提升与体积不增加",
+    description: "惯性导航系统希望提升姿态和位置测量精度，但不能增加 IMU 体积、重量和功耗。",
+    domain: "惯性导航/传感器",
+    systemName: "小型化惯性测量单元 IMU",
+    goal: "提升导航与姿态测量精度",
+    constraint: "不增加体积、重量和功耗",
+    status: "已识别矛盾",
+    contradictionType: "物理矛盾",
+    improvingParameter: "accuracy",
+    worseningParameter: "size",
+    physicalContradiction: "谐振子或传感器规模既要更大以提升精度，又要更小以满足体积约束。",
+    selectedPrincipleIds: [2, 1, 15, 23, 24],
+    solutionHypothesis: "",
+    imaQueryDraft: "",
+    knowledgeNotes:
+      "可优先检索误差建模、Allan 方差、ARW/VRW、卡尔曼滤波、MEMS 阵列、自校准、转台标定、零偏和标度因数补偿等资料。",
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 function migrateStatus(status: CaseStatus | LegacyStatus | undefined): CaseStatus {
@@ -335,6 +355,12 @@ function knownParameterName(id: string, fallback: string) {
 }
 
 function recommendPrinciples(item: TrizCase) {
+  if (isInertialPrecisionCase(item)) {
+    return [2, 1, 15, 23, 24]
+      .map((id) => principles.find((principle) => principle.id === id))
+      .filter(Boolean) as Principle[];
+  }
+
   const signals = [item.improvingParameter, item.worseningParameter].filter(Boolean);
   const ranked = principles
     .map((principle) => ({
@@ -345,6 +371,17 @@ function recommendPrinciples(item: TrizCase) {
 
   const matched = ranked.filter((item) => item.score > 0).map((item) => item.principle);
   return (matched.length ? matched : principles.slice(0, 4)).slice(0, 5);
+}
+
+function isInertialPrecisionCase(item: TrizCase) {
+  const text = [item.description, item.goal, item.constraint, item.domain, item.systemName, item.knowledgeNotes]
+    .join(" ")
+    .toLowerCase();
+  const isInertial = ["惯性", "imu", "陀螺", "加速度计", "导航", "inertial", "gyro"].some((word) => text.includes(word));
+  const isPrecision = ["精度", "误差", "漂移", "零偏", "accuracy", "error"].some((word) => text.includes(word)) || item.improvingParameter === "accuracy";
+  const isSizeBound = ["体积", "尺寸", "重量", "功耗", "size", "weight"].some((word) => text.includes(word)) || ["size", "weight"].includes(item.worseningParameter);
+
+  return isInertial && isPrecision && isSizeBound;
 }
 
 function buildProblemBreakdown(item: TrizCase) {
@@ -446,6 +483,8 @@ function buildResourceInventory(item: TrizCase): ResourceItem[] {
 }
 
 function inferProblemFocus(item: TrizCase) {
+  if (isInertialPrecisionCase(item)) return "inertialPrecision";
+
   const text = [item.description, item.goal, item.constraint, item.domain, item.systemName]
     .join(" ")
     .toLowerCase();
@@ -477,6 +516,9 @@ function buildConcreteParts(item: TrizCase, principle: string) {
   const focus = inferProblemFocus(item);
   const common = [`${system}的关键功能模块`, "采集/反馈信号", "控制策略或工作流程"];
 
+  if (focus === "inertialPrecision") {
+    return ["陀螺零偏/标度因数/安装误差", "加速度计偏置和随机噪声", "温度补偿模型与卡尔曼滤波状态量", "不改变体积的冗余/融合路径"];
+  }
   if (focus === "energy") return ["耗能最高的模块", "电源/电池/供能路径", "后台任务和待机策略"];
   if (focus === "speed") return ["关键路径步骤", "缓存或预处理模块", "等待/排队环节"];
   if (focus === "accuracy") return ["传感或输入数据", "校准规则", "误差检测与复核流程"];
@@ -493,6 +535,13 @@ function buildConcreteSteps(item: TrizCase, conceptTitle: string) {
   const constraint = item.constraint || "副作用指标";
   const focus = inferProblemFocus(item);
 
+  if (focus === "inertialPrecision") {
+    return [
+      "先做静基座不少于 2 小时的数据采集，计算 Allan 方差，提取 BI、ARW、VRW。",
+      "用三轴转台输入 1/10/50/100 deg/s，标定标度因数、安装误差和非线性项。",
+      "把零偏、温度项、标度因数和安装误差写入补偿模型，再用卡尔曼滤波在线估计残余漂移。",
+    ];
+  }
   if (focus === "energy") {
     return [
       `列出${system}在典型使用场景下的前三个耗能来源。`,
@@ -548,6 +597,7 @@ function buildConcreteMetrics(item: TrizCase) {
   const worsening = knownParameterName(item.worseningParameter, item.constraint || "副作用指标");
   const focus = inferProblemFocus(item);
 
+  if (focus === "inertialPrecision") return ["零偏不稳定性 BI", "角度随机游走 ARW", "速度随机游走 VRW", "标度因数非线性", "1h 位置误差增长", "体积/重量/功耗变化"];
   if (focus === "energy") return ["单位任务耗电量", "连续使用时长", "峰值功耗", "温升"];
   if (focus === "speed") return ["平均响应时间", "P95 延迟", "吞吐量", "失败重试次数"];
   if (focus === "accuracy") return ["准确率", "误报率", "漏报率", "人工修正次数"];
@@ -558,6 +608,10 @@ function buildConcreteMetrics(item: TrizCase) {
 }
 
 function buildDecisionGate(item: TrizCase, concept: Pick<SolutionConcept, "impact" | "effort">) {
+  if (isInertialPrecisionCase(item)) {
+    return "进入下一轮的条件：精度提升不少于 20%，体积增加不超过 5%；若目标是惯性级，继续追踪标度因数相对误差、安装误差和漂移绝对误差。";
+  }
+
   const goal = item.goal || knownParameterName(item.improvingParameter, "目标指标");
   const constraint = item.constraint || knownParameterName(item.worseningParameter, "约束指标");
   const expectedLift = concept.impact >= 5 ? "20%" : "10%";
@@ -606,6 +660,7 @@ function buildImaQueries(item: TrizCase): ImaQuery[] {
   const constraint = item.constraint || knownParameterName(item.worseningParameter, "约束指标");
   const focus = inferProblemFocus(item);
   const focusMap: Record<string, string> = {
+    inertialPrecision: "惯性导航、陀螺仪、加速度计、误差建模、Allan 方差、卡尔曼滤波、MEMS 阵列、自校准",
     energy: "功耗、续航、电池、能量管理",
     speed: "响应速度、关键路径、缓存、并行处理",
     accuracy: "精度、误差、传感器、校准、统计验证",
@@ -648,7 +703,13 @@ function extractKnowledgeFindings(notes: string) {
     .split(/\n|。|；|;/)
     .map((line) => line.replace(/^[-*\d.\s]+/, "").trim())
     .filter((line) => line.length >= 8)
+    .sort((a, b) => knowledgeScore(b) - knowledgeScore(a))
     .slice(0, 8);
+}
+
+function knowledgeScore(line: string) {
+  const signals = ["Allan", "卡尔曼", "MEMS", "ARW", "VRW", "零偏", "标度", "转台", "°/h", "deg/s", "√", "实验", "案例", "TRIZ"];
+  return signals.reduce((score, signal) => score + (line.includes(signal) ? 1 : 0), 0);
 }
 
 function buildKnowledgeUse(item: TrizCase, concept: SolutionConcept) {
@@ -686,6 +747,51 @@ function buildSolutionConcepts(item: TrizCase, activePrinciples: Principle[]): S
   const goal = item.goal || "改善目标";
   const constraint = item.constraint || knownParameterName(item.worseningParameter, "副作用");
   const chosen = activePrinciples.length ? activePrinciples : recommendPrinciples(item).slice(0, 3);
+
+  if (isInertialPrecisionCase(item)) {
+    return [
+      {
+        title: "误差建模 + 软件补偿",
+        principle: "2. 抽取",
+        mechanism: "把精度提升从增大谐振子、光纤环或传感器尺寸，抽取到误差模型、温度补偿和在线估计。",
+        engineeringMove: "建立陀螺/加速度计静态、动态、随机误差模型，离线标定确定性误差，在线估计残余漂移。",
+        validation: "补偿前后重复静态 Allan 方差、速率转台和 1h 纯惯导位置误差测试。",
+        risk: "误差不稳定或温度模型失配时补偿会失效。",
+        impact: 5,
+        effort: 3,
+      },
+      {
+        title: "MEMS 冗余阵列 + 统计平均",
+        principle: "1. 分割 + 40. 复合材料",
+        mechanism: "把单个高精度大器件拆成多个小 MEMS 器件，通过阵列平均和状态融合降低随机噪声，理论随机项约按 sqrt(N) 改善。",
+        engineeringMove: "在体积预算内选择 N 个低成本 IMU，统一时钟同步，做阵列标定和加权融合。",
+        validation: "比较单器件与阵列的 ARW、VRW、零偏稳定性、功耗和体积。",
+        risk: "功耗和数据处理复杂度会上升，传感器相关噪声会削弱 sqrt(N) 收益。",
+        impact: 4,
+        effort: 4,
+      },
+      {
+        title: "自校准 / 模态反转",
+        principle: "15. 动态化",
+        mechanism: "让谐振子或测量轴在不同工作模态间周期切换，用自身运动抑制驱动轴/检测轴非对称。",
+        engineeringMove: "设计自校准时间窗口和校准频率；高精度场景增加校准，实时性场景降低校准。",
+        validation: "比较自校准前后零偏稳定性、标度因数线性度、信噪比和实时性损失。",
+        risk: "校准占用测量时间，实时任务可能受影响。",
+        impact: 5,
+        effort: 4,
+      },
+      {
+        title: "外部参考融合",
+        principle: "24. 中介 + 23. 反馈",
+        mechanism: "引入 GPS、星敏、里程仪或视觉等外部参考作为中介，通过卡尔曼滤波约束惯导误差发散。",
+        engineeringMove: "把平台失准角、速度/位置误差、陀螺漂移、加速度计偏置纳入状态向量。",
+        validation: "对比纯惯导与组合导航在同一路径下的 CEP、1h 漂移和丢失外部参考后的恢复表现。",
+        risk: "GNSS 拒止或外部参考不可用时收益下降，需要降级策略。",
+        impact: 4,
+        effort: 3,
+      },
+    ].map((concept) => completeConcept(concept, item));
+  }
 
   const baseConcepts = chosen.slice(0, 4).map((principle, index) => {
     if (principle.id === 23) {
@@ -1000,7 +1106,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V4 + ima 知识增强</p>
+            <p className="eyebrow">TRIZ V5 工程知识增强</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
