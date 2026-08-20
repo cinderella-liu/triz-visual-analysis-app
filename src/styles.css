@@ -411,6 +411,7 @@ dd {
 .decomposition-panel,
 .engine-panel,
 .diagnostic-panel,
+.knowledge-panel,
 .contradiction-panel,
 .resource-panel,
 .possibility-panel,
@@ -423,6 +424,7 @@ dd {
 .decomposition-panel,
 .engine-panel,
 .diagnostic-panel,
+.knowledge-panel,
 .contradiction-panel,
 .resource-panel,
 .possibility-panel,
@@ -487,6 +489,54 @@ dd {
 .diagnostic-card span {
   color: #766836;
   font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.knowledge-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.42fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.knowledge-summary div {
+  display: grid;
+  gap: 8px;
+  min-height: 86px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+}
+
+.knowledge-summary span {
+  color: #607772;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.knowledge-summary strong {
+  color: #10211f;
+  line-height: 1.45;
+}
+
+.knowledge-textarea {
+  min-height: 150px;
+}
+
+.knowledge-findings {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.knowledge-findings span {
+  border: 1px solid #d4dfdc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fbfa;
+  color: #334844;
+  font-size: 0.9rem;
   line-height: 1.45;
 }
 
@@ -851,6 +901,7 @@ dd {
   .diagnostic-list,
   .resource-grid,
   .solution-grid,
+  .knowledge-summary,
   .engine-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -872,6 +923,7 @@ dd {
   .diagnostic-list,
   .resource-grid,
   .solution-grid,
+  .knowledge-summary,
   .engine-grid {
     grid-template-columns: 1fr;
   }

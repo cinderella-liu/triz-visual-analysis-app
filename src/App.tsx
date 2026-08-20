@@ -40,6 +40,8 @@ type TrizCase = {
   physicalContradiction: string;
   selectedPrincipleIds: number[];
   solutionHypothesis: string;
+  imaQueryDraft: string;
+  knowledgeNotes: string;
   updatedAt: string;
 };
 
@@ -90,6 +92,12 @@ type SolutionConcept = {
 type DiagnosticQuestion = {
   question: string;
   example: string;
+};
+
+type ImaQuery = {
+  label: string;
+  query: string;
+  target: string;
 };
 
 const storageKey = "triz.visual.analysis.cases.v2";
@@ -222,6 +230,8 @@ const seedCases: TrizCase[] = [
     physicalContradiction: "电池既要容量更大，又不能占用更多空间。",
     selectedPrincipleIds: [28, 35, 40],
     solutionHypothesis: "通过高能量密度材料、动态功耗管理和软硬件协同降低单位任务能耗。",
+    imaQueryDraft: "",
+    knowledgeNotes: "",
     updatedAt: new Date().toISOString(),
   },
 ];
@@ -249,6 +259,8 @@ function normalizeCase(raw: Partial<TrizCase> & { status?: CaseStatus | LegacySt
     physicalContradiction: raw.physicalContradiction ?? "",
     selectedPrincipleIds: Array.isArray(raw.selectedPrincipleIds) ? raw.selectedPrincipleIds : [],
     solutionHypothesis: raw.solutionHypothesis ?? "",
+    imaQueryDraft: raw.imaQueryDraft ?? "",
+    knowledgeNotes: raw.knowledgeNotes ?? "",
     updatedAt: raw.updatedAt ?? new Date().toISOString(),
   };
 }
@@ -588,6 +600,87 @@ function buildDiagnosticQuestions(item: TrizCase): DiagnosticQuestion[] {
   return questions.slice(0, 5);
 }
 
+function buildImaQueries(item: TrizCase): ImaQuery[] {
+  const system = item.systemName || "当前系统";
+  const goal = item.goal || knownParameterName(item.improvingParameter, "目标指标");
+  const constraint = item.constraint || knownParameterName(item.worseningParameter, "约束指标");
+  const focus = inferProblemFocus(item);
+  const focusMap: Record<string, string> = {
+    energy: "功耗、续航、电池、能量管理",
+    speed: "响应速度、关键路径、缓存、并行处理",
+    accuracy: "精度、误差、传感器、校准、统计验证",
+    reliability: "可靠性、故障模式、冗余、降级、自恢复",
+    structure: "结构轻量化、强度、材料、拓扑优化、载荷路径",
+    cost: "成本、制造工艺、BOM、标准件、装配效率",
+    general: "工程问题、设计矛盾、验证方法",
+  };
+
+  return [
+    {
+      label: "工程原理",
+      target: "knowledge-base",
+      query: `${system} 如何在提升 ${goal} 的同时不恶化 ${constraint}？请返回相关的${focusMap[focus]}原理、公式、设计准则和适用边界。`,
+    },
+    {
+      label: "可复用案例",
+      target: "knowledge-base",
+      query: `${system} ${goal} ${constraint} 有哪些工程案例、专利方案或失败案例？请按方案、机制、验证指标、风险整理。`,
+    },
+    {
+      label: "实验验证",
+      target: "knowledge-base",
+      query: `${system} 针对 ${goal} 和 ${constraint} 应该如何设计第一轮验证实验？需要哪些测试指标、样机条件和通过标准？`,
+    },
+    {
+      label: "TRIZ 映射",
+      target: "knowledge-base",
+      query: `${system} 的问题「${item.description || goal}」可以映射到哪些 TRIZ 发明原理？请给出每个原理对应的具体工程动作。`,
+    },
+  ];
+}
+
+function formatImaQueryDraft(queries: ImaQuery[]) {
+  return queries.map((item, index) => `${index + 1}. [${item.label}/${item.target}] ${item.query}`).join("\n");
+}
+
+function extractKnowledgeFindings(notes: string) {
+  return notes
+    .split(/\n|。|；|;/)
+    .map((line) => line.replace(/^[-*\d.\s]+/, "").trim())
+    .filter((line) => line.length >= 8)
+    .slice(0, 8);
+}
+
+function buildKnowledgeUse(item: TrizCase, concept: SolutionConcept) {
+  const findings = extractKnowledgeFindings(item.knowledgeNotes);
+  if (!findings.length) {
+    return `待从 ima 知识库补充「${concept.title}」的工程依据、案例和验证边界。`;
+  }
+  return findings.slice(0, 2).join("；");
+}
+
+function generateKnowledgeEnhancedPlan(item: TrizCase, activePrinciples: Principle[]) {
+  const baseReport = generateAnalysisPlan(item, activePrinciples);
+  const queries = buildImaQueries(item);
+  const findings = extractKnowledgeFindings(item.knowledgeNotes);
+  const concepts = buildSolutionConcepts(item, activePrinciples);
+
+  return [
+    baseReport,
+    "",
+    "七、ima 知识库增强",
+    findings.length
+      ? `- 已提取知识依据：${findings.join("；")}`
+      : "- 当前还没有粘贴 ima 返回内容；请先用下方检索问题去 ima knowledge-base 查询，再把结果粘贴回来。",
+    "",
+    "八、建议检索问题",
+    ...queries.map((item, index) => `- ${index + 1}. ${item.query}`),
+    "",
+    "九、知识到方案的落地映射",
+    ...concepts.map((concept, index) => `- ${index + 1}. ${concept.title}：${buildKnowledgeUse(item, concept)}`),
+  ].join("\n");
+}
+
 function buildSolutionConcepts(item: TrizCase, activePrinciples: Principle[]): SolutionConcept[] {
   const system = item.systemName || "当前系统";
   const goal = item.goal || "改善目标";
@@ -789,6 +882,8 @@ export function App() {
   const solutionConcepts = selectedCase ? buildSolutionConcepts(selectedCase, activePrinciples) : [];
   const decisionSummary = buildDecisionSummary(solutionConcepts);
   const diagnosticQuestions = selectedCase ? buildDiagnosticQuestions(selectedCase) : [];
+  const imaQueries = selectedCase ? buildImaQueries(selectedCase) : [];
+  const knowledgeFindings = selectedCase ? extractKnowledgeFindings(selectedCase.knowledgeNotes) : [];
 
   function updateCases(nextCases: TrizCase[]) {
     setCases(nextCases);
@@ -882,12 +977,30 @@ export function App() {
     });
   }
 
+  function handleGenerateImaQueries() {
+    if (!selectedCase) return;
+    updateCase({
+      ...selectedCase,
+      imaQueryDraft: formatImaQueryDraft(imaQueries),
+    });
+  }
+
+  function handleGenerateKnowledgePlan() {
+    if (!selectedCase) return;
+    updateCase({
+      ...selectedCase,
+      selectedPrincipleIds: activePrinciples.map((principle) => principle.id),
+      imaQueryDraft: selectedCase.imaQueryDraft || formatImaQueryDraft(imaQueries),
+      solutionHypothesis: generateKnowledgeEnhancedPlan(selectedCase, activePrinciples),
+    });
+  }
+
   return (
     <main className="app-shell">
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V3 工程方案生成器</p>
+            <p className="eyebrow">TRIZ V4 + ima 知识增强</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -1018,6 +1131,54 @@ export function App() {
                   </article>
                 ))}
               </div>
+            </section>
+
+            <section className="knowledge-panel">
+              <div className="section-title">
+                <BookOpen size={19} />
+                <h2>ima 知识增强</h2>
+              </div>
+              <div className="knowledge-summary">
+                <div>
+                  <span>连接方式</span>
+                  <strong>当前版本不保存 API Key；先用 ima 查询结果增强分析，后续可接后端代理。</strong>
+                </div>
+                <div>
+                  <span>已识别知识点</span>
+                  <strong>{knowledgeFindings.length ? `${knowledgeFindings.length} 条` : "等待粘贴 ima 返回内容"}</strong>
+                </div>
+              </div>
+              <button className="ghost-button full-width" type="button" onClick={handleGenerateImaQueries}>
+                <Search size={18} />
+                生成 ima 检索问题
+              </button>
+              <label>
+                ima 检索问题
+                <textarea
+                  className="compact-textarea"
+                  value={selectedCase.imaQueryDraft}
+                  onChange={(event) => updateSelected("imaQueryDraft", event.target.value)}
+                  placeholder="点击上方按钮，生成适合复制到 ima knowledge-base 的检索问题"
+                />
+              </label>
+              <label>
+                ima 返回的知识片段
+                <textarea
+                  className="knowledge-textarea"
+                  value={selectedCase.knowledgeNotes}
+                  onChange={(event) => updateSelected("knowledgeNotes", event.target.value)}
+                  placeholder="把 ima 返回的工程原理、案例、公式、验证方法粘贴到这里"
+                />
+              </label>
+              <div className="knowledge-findings">
+                {(knowledgeFindings.length ? knowledgeFindings : ["暂无知识片段。先生成检索问题，到 ima 查询后粘贴结果。"]).map((finding) => (
+                  <span key={finding}>{finding}</span>
+                ))}
+              </div>
+              <button className="primary-button full-width" type="button" onClick={handleGenerateKnowledgePlan}>
+                <Sparkles size={18} />
+                用 ima 知识增强分析
+              </button>
             </section>
 
             <section className="decomposition-panel">
