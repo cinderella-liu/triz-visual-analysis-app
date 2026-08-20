@@ -406,17 +406,53 @@ dd {
 
 .analysis-board,
 .principle-panel,
+.decomposition-panel,
+.possibility-panel,
 .analysis-path {
   margin-top: 24px;
 }
 
 .analysis-board,
 .principle-panel,
+.decomposition-panel,
+.possibility-panel,
 .graph-card {
   border: 1px solid #d5e2df;
   border-radius: 8px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.decomposition-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.decomposition-card {
+  display: grid;
+  gap: 8px;
+  min-height: 150px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.decomposition-card span {
+  color: #607772;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.decomposition-card strong {
+  color: #10211f;
+  line-height: 1.35;
+}
+
+.decomposition-card small {
+  color: #607772;
+  line-height: 1.45;
 }
 
 .switch-row {
@@ -468,7 +504,22 @@ dd {
 }
 
 .plan-textarea {
-  min-height: 210px;
+  min-height: 320px;
+  line-height: 1.55;
+}
+
+.possibility-list {
+  display: grid;
+  gap: 10px;
+}
+
+.possibility-list p {
+  margin: 0;
+  border: 1px solid #d4dfdc;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  color: #1f3431;
   line-height: 1.55;
 }
 
@@ -647,6 +698,10 @@ dd {
   .principle-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .decomposition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -660,7 +715,8 @@ dd {
   .path-map,
   .parameter-grid,
   .parameter-hints,
-  .principle-list {
+  .principle-list,
+  .decomposition-grid {
     grid-template-columns: 1fr;
   }
 

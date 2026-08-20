@@ -282,6 +282,10 @@ function parameterName(id: string) {
   return parameters.find((item) => item.id === id)?.name ?? "未选择";
 }
 
+function knownParameterName(id: string, fallback: string) {
+  return parameters.find((item) => item.id === id)?.name ?? fallback;
+}
+
 function recommendPrinciples(item: TrizCase) {
   const signals = [item.improvingParameter, item.worseningParameter].filter(Boolean);
   const ranked = principles
@@ -295,30 +299,94 @@ function recommendPrinciples(item: TrizCase) {
   return (matched.length ? matched : principles.slice(0, 4)).slice(0, 5);
 }
 
+function buildProblemBreakdown(item: TrizCase) {
+  const improving = knownParameterName(item.improvingParameter, item.goal || "目标效果");
+  const worsening = knownParameterName(item.worseningParameter, item.constraint || "副作用");
+
+  return [
+    {
+      label: "系统对象",
+      value: item.systemName || "待识别",
+      insight: `先把分析边界限定在「${item.systemName || "当前系统"}」，避免把外部环境和系统内部问题混在一起。`,
+    },
+    {
+      label: "有用功能",
+      value: item.goal || "待识别",
+      insight: `用户真正想增强的是「${improving}」，不是简单增加功能数量。`,
+    },
+    {
+      label: "有害副作用",
+      value: item.constraint || worsening,
+      insight: `当前阻碍来自「${worsening}」或约束条件，TRIZ 要求在不牺牲它的前提下改进目标。`,
+    },
+    {
+      label: "理想最终结果",
+      value: `${item.goal || "目标改善"}，同时${item.constraint || "不引入新的副作用"}`,
+      insight: "理想解不是折中，而是让有用功能增加、代价尽量不增加。",
+    },
+    {
+      label: "可用资源",
+      value: "结构、时间、信息、控制策略、材料、环境",
+      insight: "优先寻找系统已有资源，再考虑新增部件或新增成本。",
+    },
+  ];
+}
+
+function buildPossibilities(item: TrizCase, activePrinciples: Principle[]) {
+  const system = item.systemName || "系统";
+  const goal = item.goal || "改善目标";
+  const constraint = item.constraint || knownParameterName(item.worseningParameter, "副作用");
+
+  return activePrinciples.map((principle) => {
+    if (principle.id === 28) {
+      return `用「${principle.name}」把${system}的一部分硬件负担转移到算法、传感或信息流，先降低物理代价，再提升「${goal}」。`;
+    }
+    if (principle.id === 35) {
+      return `用「${principle.name}」把固定参数改成动态参数，让${system}在不同场景下采用不同策略，减少「${constraint}」的副作用。`;
+    }
+    if (principle.id === 40) {
+      return `用「${principle.name}」组合材料、模块或能力，让不同部分分别承担性能、成本和稳定性要求。`;
+    }
+    return `用「${principle.name}」：${principle.action}，形成一个不直接牺牲「${constraint}」的替代路径。`;
+  });
+}
+
 function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
-  const improving = parameterName(item.improvingParameter);
-  const worsening = parameterName(item.worseningParameter);
+  const improving = knownParameterName(item.improvingParameter, item.goal || "待改善参数");
+  const worsening = knownParameterName(item.worseningParameter, item.constraint || "可能恶化参数");
   const contradiction =
     item.contradictionType === "技术矛盾"
       ? `希望改善「${improving}」，但可能恶化「${worsening}」。`
       : item.physicalContradiction || `同一系统同时需要满足互相冲突的状态。`;
+  const breakdown = buildProblemBreakdown(item);
+  const possibilities = buildPossibilities(item, activePrinciples);
   const principleLines = activePrinciples.map(
     (principle, index) => `${index + 1}. ${principle.name}：${principle.action}`,
   );
-  const firstAction = activePrinciples[0]?.action ?? "先选择一个发明原理，再把它转化为可验证动作。";
 
   return [
-    `分析判断：${item.title}`,
-    `问题：${item.description || "待补充问题描述"}`,
-    `当前系统：${item.systemName || "待补充系统"}；目标：${item.goal || "待补充目标"}；约束：${item.constraint || "待补充约束"}。`,
-    `核心矛盾：${contradiction}`,
+    `TRIZ 分析报告：${item.title}`,
     "",
-    "推荐方案方向：",
+    "一、问题拆解",
+    ...breakdown.map((part) => `- ${part.label}：${part.value}。${part.insight}`),
+    "",
+    "二、矛盾推导",
+    `- 表层问题：${item.description || "待补充问题描述"}`,
+    `- 技术矛盾：${contradiction}`,
+    `- 物理矛盾：${item.physicalContradiction || `系统既要提升「${improving}」，又不能付出「${worsening}」代价。`}`,
+    `- TRIZ 关键问法：怎样让「${improving}」变好，同时不让「${worsening}」变差？`,
+    "",
+    "三、可用发明原理",
     ...principleLines,
     "",
-    `初始方案：${firstAction}围绕「${item.goal || "改善目标"}」设计一个小规模验证版本，并保持「${item.constraint || worsening}」不被明显恶化。`,
-    "验证指标：目标参数是否改善；副作用参数是否可控；用户/系统成本是否低于现有方案。",
-    "下一步实验：做一个最小样机或流程原型，记录前后对比数据，再决定是否扩大方案。",
+    "四、可能方案",
+    ...possibilities.map((possibility, index) => `${index + 1}. ${possibility}`),
+    "",
+    "五、验证路径",
+    `- 目标指标：验证「${improving}」是否显著改善。`,
+    `- 副作用指标：验证「${worsening}」是否没有明显恶化。`,
+    "- 最小实验：先做一个低成本原型或流程模拟，用前后对比数据判断方案是否值得继续。",
+    "- 决策标准：只有当目标收益大于新增复杂度、成本和风险时，才进入下一轮方案深化。",
   ].join("\n");
 }
 
@@ -368,6 +436,8 @@ export function App() {
   const selectedPrinciples = selectedCase
     ? principles.filter((principle) => selectedCase.selectedPrincipleIds.includes(principle.id))
     : [];
+  const breakdown = selectedCase ? buildProblemBreakdown(selectedCase) : [];
+  const possibilities = selectedCase ? buildPossibilities(selectedCase, selectedPrinciples.length ? selectedPrinciples : recommended.slice(0, 3)) : [];
 
   function updateCases(nextCases: TrizCase[]) {
     setCases(nextCases);
@@ -564,6 +634,22 @@ export function App() {
 
             <WorkflowSteps status={selectedCase.status} />
 
+            <section className="decomposition-panel">
+              <div className="section-title">
+                <FileText size={19} />
+                <h2>问题拆解</h2>
+              </div>
+              <div className="decomposition-grid">
+                {breakdown.map((item) => (
+                  <div className="decomposition-card" key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <small>{item.insight}</small>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section className="analysis-board">
               <div className="section-title">
                 <BrainCircuit size={19} />
@@ -646,10 +732,10 @@ export function App() {
               </div>
               <button className="primary-button plan-button" type="button" onClick={handleGeneratePlan}>
                 <Sparkles size={18} />
-                生成分析方案
+                生成 TRIZ 分析方案
               </button>
               <label>
-                分析方案
+                TRIZ 分析报告
                 <textarea
                   className="plan-textarea"
                   value={selectedCase.solutionHypothesis}
@@ -657,6 +743,18 @@ export function App() {
                   placeholder="点击「生成分析方案」，系统会把矛盾和发明原理转成可验证方案"
                 />
               </label>
+            </section>
+
+            <section className="possibility-panel">
+              <div className="section-title">
+                <Lightbulb size={19} />
+                <h2>可能性分析</h2>
+              </div>
+              <div className="possibility-list">
+                {possibilities.map((possibility) => (
+                  <p key={possibility}>{possibility}</p>
+                ))}
+              </div>
             </section>
 
             <section className="analysis-path" aria-label="分析图谱">
