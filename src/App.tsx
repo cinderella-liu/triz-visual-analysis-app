@@ -295,6 +295,33 @@ function recommendPrinciples(item: TrizCase) {
   return (matched.length ? matched : principles.slice(0, 4)).slice(0, 5);
 }
 
+function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
+  const improving = parameterName(item.improvingParameter);
+  const worsening = parameterName(item.worseningParameter);
+  const contradiction =
+    item.contradictionType === "技术矛盾"
+      ? `希望改善「${improving}」，但可能恶化「${worsening}」。`
+      : item.physicalContradiction || `同一系统同时需要满足互相冲突的状态。`;
+  const principleLines = activePrinciples.map(
+    (principle, index) => `${index + 1}. ${principle.name}：${principle.action}`,
+  );
+  const firstAction = activePrinciples[0]?.action ?? "先选择一个发明原理，再把它转化为可验证动作。";
+
+  return [
+    `分析判断：${item.title}`,
+    `问题：${item.description || "待补充问题描述"}`,
+    `当前系统：${item.systemName || "待补充系统"}；目标：${item.goal || "待补充目标"}；约束：${item.constraint || "待补充约束"}。`,
+    `核心矛盾：${contradiction}`,
+    "",
+    "推荐方案方向：",
+    ...principleLines,
+    "",
+    `初始方案：${firstAction}围绕「${item.goal || "改善目标"}」设计一个小规模验证版本，并保持「${item.constraint || worsening}」不被明显恶化。`,
+    "验证指标：目标参数是否改善；副作用参数是否可控；用户/系统成本是否低于现有方案。",
+    "下一步实验：做一个最小样机或流程原型，记录前后对比数据，再决定是否扩大方案。",
+  ].join("\n");
+}
+
 function buildStage(item: TrizCase): CaseStatus {
   if (item.solutionHypothesis.trim()) return "已形成方案";
   if (item.selectedPrincipleIds.length) return "已生成原理";
@@ -423,6 +450,16 @@ export function App() {
         ? selectedCase.selectedPrincipleIds.filter((item) => item !== id)
         : [...selectedCase.selectedPrincipleIds, id],
     );
+  }
+
+  function handleGeneratePlan() {
+    if (!selectedCase) return;
+    const activePrinciples = selectedPrinciples.length ? selectedPrinciples : recommended.slice(0, 3);
+    updateCase({
+      ...selectedCase,
+      selectedPrincipleIds: activePrinciples.map((principle) => principle.id),
+      solutionHypothesis: generateAnalysisPlan(selectedCase, activePrinciples),
+    });
   }
 
   return (
@@ -607,12 +644,17 @@ export function App() {
                   </button>
                 ))}
               </div>
+              <button className="primary-button plan-button" type="button" onClick={handleGeneratePlan}>
+                <Sparkles size={18} />
+                生成分析方案
+              </button>
               <label>
-                方案假设
+                分析方案
                 <textarea
+                  className="plan-textarea"
                   value={selectedCase.solutionHypothesis}
                   onChange={(event) => updateSelected("solutionHypothesis", event.target.value)}
-                  placeholder="把选中的发明原理转化成一个可验证的产品或工程方案"
+                  placeholder="点击「生成分析方案」，系统会把矛盾和发明原理转成可验证方案"
                 />
               </label>
             </section>

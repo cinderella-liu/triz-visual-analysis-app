@@ -462,6 +462,16 @@ dd {
   margin-bottom: 14px;
 }
 
+.plan-button {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.plan-textarea {
+  min-height: 210px;
+  line-height: 1.55;
+}
+
 .principle-card {
   display: grid;
   align-content: start;
