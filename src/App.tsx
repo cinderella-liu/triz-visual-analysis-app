@@ -100,8 +100,34 @@ type ImaQuery = {
   target: string;
 };
 
+type ImaApiConfig = {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+};
+
+type ImaRunState = {
+  status: "idle" | "running" | "done" | "error";
+  message: string;
+};
+
+type StructuredKnowledge = {
+  principles: string[];
+  cases: string[];
+  formulas: string[];
+  experiments: string[];
+  risks: string[];
+};
+
 const storageKey = "triz.visual.analysis.cases.v2";
 const legacyStorageKey = "triz.visual.analysis.cases.v1";
+const imaConfigStorageKey = "triz.visual.analysis.ima.config.v1";
+
+const emptyImaConfig: ImaApiConfig = {
+  endpoint: "",
+  apiKey: "",
+  model: "ima-knowledge",
+};
 
 const parameters: Parameter[] = [
   { id: "weight", name: "重量", hint: "系统、部件或载荷变重" },
@@ -299,6 +325,26 @@ function loadCases(): TrizCase[] {
 
 function saveCases(cases: TrizCase[]) {
   window.localStorage.setItem(storageKey, JSON.stringify(cases));
+}
+
+function loadImaApiConfig(): ImaApiConfig {
+  const raw = window.localStorage.getItem(imaConfigStorageKey);
+  if (!raw) return emptyImaConfig;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<ImaApiConfig>;
+    return {
+      endpoint: parsed.endpoint ?? "",
+      apiKey: parsed.apiKey ?? "",
+      model: parsed.model ?? "ima-knowledge",
+    };
+  } catch {
+    return emptyImaConfig;
+  }
+}
+
+function saveImaApiConfig(config: ImaApiConfig) {
+  window.localStorage.setItem(imaConfigStorageKey, JSON.stringify(config));
 }
 
 function createCase(draft: CaseDraft): TrizCase {
@@ -707,9 +753,97 @@ function extractKnowledgeFindings(notes: string) {
     .slice(0, 8);
 }
 
+function extractStructuredKnowledge(notes: string): StructuredKnowledge {
+  const lines = notes
+    .split(/\n|。|；|;/)
+    .map((line) => line.replace(/^[-*\d.\s]+/, "").trim())
+    .filter((line) => line.length >= 6);
+
+  const pick = (signals: string[]) =>
+    lines
+      .filter((line) => signals.some((signal) => line.toLowerCase().includes(signal.toLowerCase())))
+      .sort((a, b) => knowledgeScore(b) - knowledgeScore(a))
+      .slice(0, 4);
+
+  return {
+    principles: pick(["原理", "机制", "模型", "补偿", "卡尔曼", "Allan", "误差"]),
+    cases: pick(["案例", "项目", "DARPA", "博世", "诺格", "赛峰", "Honeywell", "MEMS", "专利"]),
+    formulas: pick(["公式", "方程", "δ", "误差模型", "ARW", "VRW", "BI", "°/h", "sqrt", "√"]),
+    experiments: pick(["实验", "测试", "验证", "转台", "静基座", "样机", "指标", "通过标准"]),
+    risks: pick(["风险", "失败", "边界", "受限", "复杂度", "功耗", "实时性", "失配"]),
+  };
+}
+
 function knowledgeScore(line: string) {
   const signals = ["Allan", "卡尔曼", "MEMS", "ARW", "VRW", "零偏", "标度", "转台", "°/h", "deg/s", "√", "实验", "案例", "TRIZ"];
   return signals.reduce((score, signal) => score + (line.includes(signal) ? 1 : 0), 0);
+}
+
+function formatStructuredKnowledge(knowledge: StructuredKnowledge) {
+  const groups: Array<[string, string[]]> = [
+    ["原理依据", knowledge.principles],
+    ["工程案例", knowledge.cases],
+    ["公式/模型", knowledge.formulas],
+    ["实验方法", knowledge.experiments],
+    ["风险边界", knowledge.risks],
+  ];
+
+  return groups
+    .map(([title, items]) => [`${title}：`, ...(items.length ? items.map((item) => `- ${item}`) : ["- 待补充"])].join("\n"))
+    .join("\n\n");
+}
+
+async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery, item: TrizCase) {
+  if (!config.endpoint.trim()) {
+    throw new Error("请先填写 ima Open API 或后端代理 endpoint。");
+  }
+  if (!config.apiKey.trim()) {
+    throw new Error("请先填写 API Key。");
+  }
+
+  const response = await fetch(config.endpoint.trim(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+    },
+    body: JSON.stringify({
+      model: config.model.trim() || "ima-knowledge",
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是工程知识库检索助手。请只基于知识库材料回答，输出必须分为：原理依据、工程案例、公式/模型、实验方法、风险边界。每类尽量给可执行细节。",
+        },
+        {
+          role: "user",
+          content: `工程问题：${item.description}\n系统：${item.systemName}\n目标：${item.goal}\n约束：${item.constraint}\n检索任务：${query.query}`,
+        },
+      ],
+      temperature: 0.2,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`ima 请求失败：${response.status} ${text.slice(0, 160)}`);
+  }
+
+  const data = await response.json();
+  const content =
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.text ??
+    data?.output_text ??
+    data?.result ??
+    data?.data?.content ??
+    data?.content ??
+    "";
+
+  if (typeof content !== "string" || !content.trim()) {
+    throw new Error("ima 返回为空或格式暂不支持。");
+  }
+
+  return `【${query.label}】\n${content.trim()}`;
 }
 
 function buildKnowledgeUse(item: TrizCase, concept: SolutionConcept) {
@@ -724,6 +858,7 @@ function generateKnowledgeEnhancedPlan(item: TrizCase, activePrinciples: Princip
   const baseReport = generateAnalysisPlan(item, activePrinciples);
   const queries = buildImaQueries(item);
   const findings = extractKnowledgeFindings(item.knowledgeNotes);
+  const structuredKnowledge = extractStructuredKnowledge(item.knowledgeNotes);
   const concepts = buildSolutionConcepts(item, activePrinciples);
 
   return [
@@ -734,10 +869,13 @@ function generateKnowledgeEnhancedPlan(item: TrizCase, activePrinciples: Princip
       ? `- 已提取知识依据：${findings.join("；")}`
       : "- 当前还没有粘贴 ima 返回内容；请先用下方检索问题去 ima knowledge-base 查询，再把结果粘贴回来。",
     "",
-    "八、建议检索问题",
+    "八、结构化知识摘要",
+    formatStructuredKnowledge(structuredKnowledge),
+    "",
+    "九、建议检索问题",
     ...queries.map((item, index) => `- ${index + 1}. ${item.query}`),
     "",
-    "九、知识到方案的落地映射",
+    "十、知识到方案的落地映射",
     ...concepts.map((concept, index) => `- ${index + 1}. ${concept.title}：${buildKnowledgeUse(item, concept)}`),
   ].join("\n");
 }
@@ -949,10 +1087,16 @@ export function App() {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<CaseDraft>(emptyDraft);
   const [editing, setEditing] = useState(false);
+  const [imaConfig, setImaConfig] = useState<ImaApiConfig>(loadImaApiConfig);
+  const [imaRunState, setImaRunState] = useState<ImaRunState>({ status: "idle", message: "等待配置 ima Open API" });
 
   useEffect(() => {
     saveCases(cases);
   }, [cases]);
+
+  useEffect(() => {
+    saveImaApiConfig(imaConfig);
+  }, [imaConfig]);
 
   const selectedCase = cases.find((item) => item.id === selectedId) ?? cases[0];
 
@@ -990,6 +1134,7 @@ export function App() {
   const diagnosticQuestions = selectedCase ? buildDiagnosticQuestions(selectedCase) : [];
   const imaQueries = selectedCase ? buildImaQueries(selectedCase) : [];
   const knowledgeFindings = selectedCase ? extractKnowledgeFindings(selectedCase.knowledgeNotes) : [];
+  const structuredKnowledge = selectedCase ? extractStructuredKnowledge(selectedCase.knowledgeNotes) : extractStructuredKnowledge("");
 
   function updateCases(nextCases: TrizCase[]) {
     setCases(nextCases);
@@ -1101,12 +1246,46 @@ export function App() {
     });
   }
 
+  async function handleRunImaWorkflow() {
+    if (!selectedCase) return;
+
+    const queries = buildImaQueries(selectedCase);
+    setImaRunState({ status: "running", message: `正在调用 ima：0/${queries.length}` });
+
+    try {
+      const results: string[] = [];
+
+      for (const [index, query] of queries.entries()) {
+        setImaRunState({ status: "running", message: `正在调用 ima：${index + 1}/${queries.length} - ${query.label}` });
+        results.push(await callImaCompatibleApi(imaConfig, query, selectedCase));
+      }
+
+      const nextCase = {
+        ...selectedCase,
+        selectedPrincipleIds: activePrinciples.map((principle) => principle.id),
+        imaQueryDraft: formatImaQueryDraft(queries),
+        knowledgeNotes: results.join("\n\n"),
+      };
+
+      updateCase({
+        ...nextCase,
+        solutionHypothesis: generateKnowledgeEnhancedPlan(nextCase, activePrinciples),
+      });
+      setImaRunState({ status: "done", message: `ima 检索完成：已吸收 ${queries.length} 组知识` });
+    } catch (error) {
+      setImaRunState({
+        status: "error",
+        message: error instanceof Error ? error.message : "ima 调用失败，请检查 endpoint、key 或网络。",
+      });
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V5 工程知识增强</p>
+            <p className="eyebrow">TRIZ V6 ima 自动检索</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -1247,16 +1426,50 @@ export function App() {
               <div className="knowledge-summary">
                 <div>
                   <span>连接方式</span>
-                  <strong>当前版本不保存 API Key；先用 ima 查询结果增强分析，后续可接后端代理。</strong>
+                  <strong>支持 ima Open API 或后端代理；Key 仅保存在当前设备本地。</strong>
                 </div>
                 <div>
                   <span>已识别知识点</span>
                   <strong>{knowledgeFindings.length ? `${knowledgeFindings.length} 条` : "等待粘贴 ima 返回内容"}</strong>
                 </div>
               </div>
+              <div className="api-config-grid">
+                <label>
+                  Endpoint
+                  <input
+                    value={imaConfig.endpoint}
+                    onChange={(event) => setImaConfig({ ...imaConfig, endpoint: event.target.value })}
+                    placeholder="https://.../v1/chat/completions 或你的后端代理地址"
+                  />
+                </label>
+                <label>
+                  API Key
+                  <input
+                    type="password"
+                    value={imaConfig.apiKey}
+                    onChange={(event) => setImaConfig({ ...imaConfig, apiKey: event.target.value })}
+                    placeholder="只保存在本机 localStorage"
+                  />
+                </label>
+                <label>
+                  Model
+                  <input
+                    value={imaConfig.model}
+                    onChange={(event) => setImaConfig({ ...imaConfig, model: event.target.value })}
+                    placeholder="ima-knowledge"
+                  />
+                </label>
+              </div>
+              <div className={`api-status ${imaRunState.status}`}>
+                <span>{imaRunState.message}</span>
+              </div>
               <button className="ghost-button full-width" type="button" onClick={handleGenerateImaQueries}>
                 <Search size={18} />
                 生成 ima 检索问题
+              </button>
+              <button className="primary-button full-width" type="button" onClick={handleRunImaWorkflow} disabled={imaRunState.status === "running"}>
+                <Sparkles size={18} />
+                自动调用 ima 并生成增强分析
               </button>
               <label>
                 ima 检索问题
@@ -1279,6 +1492,20 @@ export function App() {
               <div className="knowledge-findings">
                 {(knowledgeFindings.length ? knowledgeFindings : ["暂无知识片段。先生成检索问题，到 ima 查询后粘贴结果。"]).map((finding) => (
                   <span key={finding}>{finding}</span>
+                ))}
+              </div>
+              <div className="structured-knowledge">
+                {[
+                  ["原理依据", structuredKnowledge.principles],
+                  ["工程案例", structuredKnowledge.cases],
+                  ["公式/模型", structuredKnowledge.formulas],
+                  ["实验方法", structuredKnowledge.experiments],
+                  ["风险边界", structuredKnowledge.risks],
+                ].map(([title, items]) => (
+                  <article key={title as string}>
+                    <strong>{title as string}</strong>
+                    <span>{(items as string[]).slice(0, 2).join("；") || "待补充"}</span>
+                  </article>
                 ))}
               </div>
               <button className="primary-button full-width" type="button" onClick={handleGenerateKnowledgePlan}>
