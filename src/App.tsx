@@ -807,9 +807,9 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
 
   const baseEndpoint = config.endpoint.trim() || emptyImaConfig.endpoint;
   const knowledgeBaseResponse = await imaPost(config, baseEndpoint, {
-    query: query.query,
+    query: "",
     cursor: "",
-    limit: 8,
+    limit: 20,
   });
 
   const knowledgeBases = extractImaItems(knowledgeBaseResponse)
@@ -835,11 +835,24 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
     documents.push(...renderedHits);
   }
 
+  if (!documents.length) {
+    try {
+      const globalResult = await imaPost(config, searchEndpoint, {
+        query: query.query,
+        cursor: "",
+        limit: 10,
+      });
+      documents.push(...extractImaItems(globalResult).map((hit) => renderImaItem(hit)).filter(Boolean));
+    } catch {
+      // Some ima deployments require knowledge_base_id for search_knowledge.
+    }
+  }
+
   const fallbackItems = extractImaItems(knowledgeBaseResponse).map((entry) => renderImaItem(entry)).filter(Boolean);
   const content = documents.length ? documents.slice(0, 12).join("\n") : fallbackItems.slice(0, 8).join("\n");
 
   if (!content.trim()) {
-    return `【${query.label}】\nima 已返回成功，但没有检索到可展示的知识片段。原始摘要：${JSON.stringify(knowledgeBaseResponse).slice(0, 800)}`;
+    return `【${query.label}】\nima 认证成功，但当前 API 没有返回可访问的知识库或知识片段。请确认 ima 里已创建/授权知识库，并且知识库内有可被 skill 检索的文档。`;
   }
 
   return `【${query.label}】\n${content}`;
@@ -1343,7 +1356,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V6.1 ima 官方接口</p>
+            <p className="eyebrow">TRIZ V6.3 ima 知识库搜索</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
