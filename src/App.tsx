@@ -19,6 +19,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type CaseStatus = "待整理" | "已建模" | "已识别矛盾" | "已生成原理" | "已形成方案";
@@ -845,13 +846,33 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
 }
 
 async function imaPost(config: ImaApiConfig, endpoint: string, body: Record<string, unknown>) {
+  const headers = {
+    "Content-Type": "application/json",
+    "ima-openapi-clientid": config.clientId.trim(),
+    "ima-openapi-apikey": config.apiKey.trim(),
+  };
+
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.post({
+      url: endpoint,
+      headers,
+      data: body,
+      responseType: "json",
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`ima 请求失败：${response.status} ${JSON.stringify(response.data).slice(0, 160)}`);
+    }
+    const data = response.data;
+    if (typeof data?.code === "number" && data.code !== 0) {
+      throw new Error(`ima 返回错误：${data.code} ${data.msg ?? data.message ?? ""}`);
+    }
+    return data;
+  }
+
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "ima-openapi-clientid": config.clientId.trim(),
-      "ima-openapi-apikey": config.apiKey.trim(),
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
