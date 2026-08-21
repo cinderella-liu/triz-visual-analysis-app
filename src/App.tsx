@@ -806,6 +806,7 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
   }
 
   const baseEndpoint = config.endpoint.trim() || emptyImaConfig.endpoint;
+  const searchText = compactImaSearchQuery(query.query);
   const knowledgeBaseResponse = await imaPost(config, baseEndpoint, {
     query: "",
     cursor: "",
@@ -814,8 +815,8 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
 
   const knowledgeBases = extractImaItems(knowledgeBaseResponse)
     .map((entry) => ({
-      id: String(entry.id ?? entry.knowledge_base_id ?? entry.kb_id ?? entry.media_id ?? ""),
-      title: String(entry.title ?? entry.name ?? entry.knowledge_base_name ?? "未命名知识库"),
+      id: readImaField(entry, ["id", "knowledge_base_id", "kb_id", "media_id", "knowledge_base.id", "knowledge_base_info.id"]),
+      title: readImaField(entry, ["title", "name", "knowledge_base_name", "knowledge_base.name", "knowledge_base_info.name"]) || "未命名知识库",
       raw: entry,
     }))
     .filter((entry) => entry.id);
@@ -825,7 +826,7 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
 
   for (const knowledgeBase of knowledgeBases.slice(0, 5)) {
     const result = await imaPost(config, searchEndpoint, {
-      query: query.query,
+      query: searchText,
       knowledge_base_id: knowledgeBase.id,
       cursor: "",
       limit: 10,
@@ -838,7 +839,7 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
   if (!documents.length) {
     try {
       const globalResult = await imaPost(config, searchEndpoint, {
-        query: query.query,
+        query: searchText,
         cursor: "",
         limit: 10,
       });
@@ -848,10 +849,13 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
     }
   }
 
-  const fallbackItems = extractImaItems(knowledgeBaseResponse).map((entry) => renderImaItem(entry)).filter(Boolean);
-  const content = documents.length ? documents.slice(0, 12).join("\n") : fallbackItems.slice(0, 8).join("\n");
+  const content = documents.length ? documents.slice(0, 12).join("\n") : "";
 
   if (!content.trim()) {
+    if (knowledgeBases.length) {
+      const names = knowledgeBases.slice(0, 5).map((base) => `「${base.title}」`).join("、");
+      return `【${query.label}】\nima 已找到 ${knowledgeBases.length} 个可访问知识库：${names}；但关键词「${searchText}」没有命中可展示的知识片段。可尝试换更短的关键词，或确认资料已被加入这些知识库。`;
+    }
     return `【${query.label}】\nima 认证成功，但当前 API 没有返回可访问的知识库或知识片段。请确认 ima 里已创建/授权知识库，并且知识库内有可被 skill 检索的文档。`;
   }
 
@@ -910,9 +914,36 @@ function extractImaItems(data: unknown): Array<Record<string, unknown>> {
   return Array.isArray(list) ? (list.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>) : [];
 }
 
+function readImaField(item: Record<string, unknown>, paths: string[]) {
+  for (const path of paths) {
+    const value = path.split(".").reduce<unknown>((current, key) => {
+      if (!current || typeof current !== "object") return undefined;
+      return (current as Record<string, unknown>)[key];
+    }, item);
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return "";
+}
+
+function compactImaSearchQuery(rawQuery: string) {
+  const candidateTerms = ["惯性系统", "精度", "体积", "误差补偿", "陀螺", "加速度计", "Allan", "卡尔曼", "MEMS", "自校准", "TRIZ"];
+  const terms = candidateTerms.filter((term) => rawQuery.includes(term));
+  if (terms.length) return Array.from(new Set(terms)).join(" ");
+
+  return rawQuery
+    .replace(/\[[^\]]+\]|\([^)]*\)|请返回.*|有哪些.*|如何.*/g, " ")
+    .split(/\s|，|。|、|\?|？/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2)
+    .slice(0, 8)
+    .join(" ")
+    .slice(0, 80);
+}
+
 function renderImaItem(item: Record<string, unknown>, knowledgeBaseTitle?: string) {
-  const title = String(item.title ?? item.name ?? item.file_name ?? item.knowledge_base_name ?? "未命名条目");
-  const content = String(item.highlight_content ?? item.summary ?? item.content ?? item.text ?? item.abstract ?? "");
+  const title = readImaField(item, ["title", "name", "file_name", "knowledge_base_name", "knowledge.title", "knowledge.name"]) || "未命名条目";
+  const content = readImaField(item, ["highlight_content", "summary", "content", "text", "abstract", "knowledge.highlight_content"]);
   const source = knowledgeBaseTitle ? `知识库：${knowledgeBaseTitle}` : "";
   return [source, `标题：${title}`, content ? `片段：${content}` : ""].filter(Boolean).join("；");
 }
@@ -1356,7 +1387,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V6.3 ima 知识库搜索</p>
+            <p className="eyebrow">TRIZ V6.4 ima 关键词检索</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
