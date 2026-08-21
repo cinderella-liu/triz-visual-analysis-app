@@ -102,6 +102,7 @@ type ImaQuery = {
 
 type ImaApiConfig = {
   endpoint: string;
+  clientId: string;
   apiKey: string;
   model: string;
 };
@@ -124,9 +125,10 @@ const legacyStorageKey = "triz.visual.analysis.cases.v1";
 const imaConfigStorageKey = "triz.visual.analysis.ima.config.v1";
 
 const emptyImaConfig: ImaApiConfig = {
-  endpoint: "",
+  endpoint: "https://ima.qq.com/openapi/wiki/v1/search_knowledge_base",
+  clientId: "",
   apiKey: "",
-  model: "ima-knowledge",
+  model: "official-ima-wiki",
 };
 
 const parameters: Parameter[] = [
@@ -334,9 +336,10 @@ function loadImaApiConfig(): ImaApiConfig {
   try {
     const parsed = JSON.parse(raw) as Partial<ImaApiConfig>;
     return {
-      endpoint: parsed.endpoint ?? "",
+      endpoint: parsed.endpoint?.includes("chat/completions") ? emptyImaConfig.endpoint : parsed.endpoint ?? emptyImaConfig.endpoint,
+      clientId: parsed.clientId ?? "",
       apiKey: parsed.apiKey ?? "",
-      model: parsed.model ?? "ima-knowledge",
+      model: parsed.model ?? "official-ima-wiki",
     };
   } catch {
     return emptyImaConfig;
@@ -793,35 +796,63 @@ function formatStructuredKnowledge(knowledge: StructuredKnowledge) {
     .join("\n\n");
 }
 
-async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery, item: TrizCase) {
-  if (!config.endpoint.trim()) {
-    throw new Error("请先填写 ima Open API 或后端代理 endpoint。");
+async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery) {
+  if (!config.clientId.trim()) {
+    throw new Error("请先填写 ima Client ID。");
   }
   if (!config.apiKey.trim()) {
     throw new Error("请先填写 API Key。");
   }
 
-  const response = await fetch(config.endpoint.trim(), {
+  const baseEndpoint = config.endpoint.trim() || emptyImaConfig.endpoint;
+  const knowledgeBaseResponse = await imaPost(config, baseEndpoint, {
+    query: query.query,
+    cursor: "",
+    limit: 8,
+  });
+
+  const knowledgeBases = extractImaItems(knowledgeBaseResponse)
+    .map((entry) => ({
+      id: String(entry.id ?? entry.knowledge_base_id ?? entry.kb_id ?? entry.media_id ?? ""),
+      title: String(entry.title ?? entry.name ?? entry.knowledge_base_name ?? "未命名知识库"),
+      raw: entry,
+    }))
+    .filter((entry) => entry.id);
+
+  const searchEndpoint = baseEndpoint.replace(/search_knowledge_base$/, "search_knowledge");
+  const documents: string[] = [];
+
+  for (const knowledgeBase of knowledgeBases.slice(0, 5)) {
+    const result = await imaPost(config, searchEndpoint, {
+      query: query.query,
+      knowledge_base_id: knowledgeBase.id,
+      cursor: "",
+      limit: 10,
+    });
+    const hits = extractImaItems(result);
+    const renderedHits = hits.map((hit) => renderImaItem(hit, knowledgeBase.title)).filter(Boolean);
+    documents.push(...renderedHits);
+  }
+
+  const fallbackItems = extractImaItems(knowledgeBaseResponse).map((entry) => renderImaItem(entry)).filter(Boolean);
+  const content = documents.length ? documents.slice(0, 12).join("\n") : fallbackItems.slice(0, 8).join("\n");
+
+  if (!content.trim()) {
+    return `【${query.label}】\nima 已返回成功，但没有检索到可展示的知识片段。原始摘要：${JSON.stringify(knowledgeBaseResponse).slice(0, 800)}`;
+  }
+
+  return `【${query.label}】\n${content}`;
+}
+
+async function imaPost(config: ImaApiConfig, endpoint: string, body: Record<string, unknown>) {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey.trim()}`,
+      "ima-openapi-clientid": config.clientId.trim(),
+      "ima-openapi-apikey": config.apiKey.trim(),
     },
-    body: JSON.stringify({
-      model: config.model.trim() || "ima-knowledge",
-      messages: [
-        {
-          role: "system",
-          content:
-            "你是工程知识库检索助手。请只基于知识库材料回答，输出必须分为：原理依据、工程案例、公式/模型、实验方法、风险边界。每类尽量给可执行细节。",
-        },
-        {
-          role: "user",
-          content: `工程问题：${item.description}\n系统：${item.systemName}\n目标：${item.goal}\n约束：${item.constraint}\n检索任务：${query.query}`,
-        },
-      ],
-      temperature: 0.2,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -830,20 +861,26 @@ async function callImaCompatibleApi(config: ImaApiConfig, query: ImaQuery, item:
   }
 
   const data = await response.json();
-  const content =
-    data?.choices?.[0]?.message?.content ??
-    data?.choices?.[0]?.text ??
-    data?.output_text ??
-    data?.result ??
-    data?.data?.content ??
-    data?.content ??
-    "";
-
-  if (typeof content !== "string" || !content.trim()) {
-    throw new Error("ima 返回为空或格式暂不支持。");
+  if (typeof data?.code === "number" && data.code !== 0) {
+    throw new Error(`ima 返回错误：${data.code} ${data.msg ?? data.message ?? ""}`);
   }
+  return data;
+}
 
-  return `【${query.label}】\n${content.trim()}`;
+function extractImaItems(data: unknown): Array<Record<string, unknown>> {
+  if (!data || typeof data !== "object") return [];
+  const root = data as Record<string, unknown>;
+  const body = (root.data && typeof root.data === "object" ? root.data : root) as Record<string, unknown>;
+  const candidates = [body.info_list, body.list, body.records, body.items, body.knowledge_base_list, body.result, root.info_list];
+  const list = candidates.find(Array.isArray);
+  return Array.isArray(list) ? (list.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>) : [];
+}
+
+function renderImaItem(item: Record<string, unknown>, knowledgeBaseTitle?: string) {
+  const title = String(item.title ?? item.name ?? item.file_name ?? item.knowledge_base_name ?? "未命名条目");
+  const content = String(item.highlight_content ?? item.summary ?? item.content ?? item.text ?? item.abstract ?? "");
+  const source = knowledgeBaseTitle ? `知识库：${knowledgeBaseTitle}` : "";
+  return [source, `标题：${title}`, content ? `片段：${content}` : ""].filter(Boolean).join("；");
 }
 
 function buildKnowledgeUse(item: TrizCase, concept: SolutionConcept) {
@@ -1257,7 +1294,7 @@ export function App() {
 
       for (const [index, query] of queries.entries()) {
         setImaRunState({ status: "running", message: `正在调用 ima：${index + 1}/${queries.length} - ${query.label}` });
-        results.push(await callImaCompatibleApi(imaConfig, query, selectedCase));
+        results.push(await callImaCompatibleApi(imaConfig, query));
       }
 
       const nextCase = {
@@ -1285,7 +1322,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V6 ima 自动检索</p>
+            <p className="eyebrow">TRIZ V6.1 ima 官方接口</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -1426,7 +1463,7 @@ export function App() {
               <div className="knowledge-summary">
                 <div>
                   <span>连接方式</span>
-                  <strong>支持 ima Open API 或后端代理；Key 仅保存在当前设备本地。</strong>
+                  <strong>使用 ima 官方知识库 OpenAPI；Client ID 和 Key 仅保存在当前设备本地。</strong>
                 </div>
                 <div>
                   <span>已识别知识点</span>
@@ -1435,11 +1472,11 @@ export function App() {
               </div>
               <div className="api-config-grid">
                 <label>
-                  Endpoint
+                  Client ID
                   <input
-                    value={imaConfig.endpoint}
-                    onChange={(event) => setImaConfig({ ...imaConfig, endpoint: event.target.value })}
-                    placeholder="https://.../v1/chat/completions 或你的后端代理地址"
+                    value={imaConfig.clientId}
+                    onChange={(event) => setImaConfig({ ...imaConfig, clientId: event.target.value })}
+                    placeholder="ima 页面里显示的 Client ID"
                   />
                 </label>
                 <label>
@@ -1452,11 +1489,11 @@ export function App() {
                   />
                 </label>
                 <label>
-                  Model
+                  官方接口
                   <input
-                    value={imaConfig.model}
-                    onChange={(event) => setImaConfig({ ...imaConfig, model: event.target.value })}
-                    placeholder="ima-knowledge"
+                    value={imaConfig.endpoint}
+                    onChange={(event) => setImaConfig({ ...imaConfig, endpoint: event.target.value || emptyImaConfig.endpoint })}
+                    placeholder="https://ima.qq.com/openapi/wiki/v1/search_knowledge_base"
                   />
                 </label>
               </div>
