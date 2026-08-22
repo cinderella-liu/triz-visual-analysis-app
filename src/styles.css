@@ -417,7 +417,8 @@ dd {
 .possibility-panel,
 .decision-panel,
 .experiment-panel,
-.analysis-path {
+.analysis-path,
+.advanced-disclosure {
   margin-top: 24px;
 }
 
@@ -437,6 +438,55 @@ dd {
   border-radius: 8px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.advanced-disclosure {
+  border: 1px solid #d5e2df;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.advanced-disclosure summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 54px;
+  padding: 14px 16px;
+  color: #174c46;
+  font-weight: 900;
+  list-style: none;
+  cursor: pointer;
+}
+
+.advanced-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-disclosure summary::after {
+  content: "+";
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef5f3;
+  color: #0f4c45;
+  font-weight: 900;
+}
+
+.advanced-disclosure[open] summary::after {
+  content: "-";
+}
+
+.advanced-disclosure summary strong {
+  color: #607772;
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.advanced-disclosure > section {
+  margin: 0 16px 16px;
 }
 
 .engine-grid {

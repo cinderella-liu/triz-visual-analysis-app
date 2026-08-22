@@ -1476,7 +1476,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V7 决策工作流</p>
+            <p className="eyebrow">TRIZ V7.1 界面收敛版</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -1585,7 +1585,7 @@ export function App() {
                 </div>
                 <div>
                   <span>分析输出</span>
-                  <strong>矛盾候选 + 资源盘点 + 方案候选 + 验证实验</strong>
+                  <strong>决策矩阵 + 第一轮实验卡</strong>
                 </div>
               </div>
               <button className="primary-button full-width" type="button" onClick={handleGeneratePlan}>
@@ -1608,6 +1608,82 @@ export function App() {
                 ))}
               </div>
             </section>
+
+            <section className="decision-panel">
+              <div className="section-title">
+                <GitBranch size={19} />
+                <h2>V7.1 决策矩阵</h2>
+              </div>
+              <div className="decision-grid">
+                {rankedExperiments.map((card, index) => (
+                  <article className="decision-card" key={card.title}>
+                    <div className="decision-rank">{index + 1}</div>
+                    <div>
+                      <strong>{card.title}</strong>
+                      <span>{card.hypothesis}</span>
+                    </div>
+                    <div className="decision-scores">
+                      <b>收益 {card.scores.benefit}</b>
+                      <b>成本 {card.scores.cost}</b>
+                      <b>风险 {card.scores.risk}</b>
+                      <b>速度 {card.scores.speed}</b>
+                      <b>优先级 {card.scores.priority}</b>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="experiment-panel">
+              <div className="section-title">
+                <Clock3 size={19} />
+                <h2>第一轮实验卡</h2>
+              </div>
+              <div className="experiment-grid">
+                {rankedExperiments.map((card) => (
+                  <article className="experiment-card" key={card.title}>
+                    <div className="solution-head">
+                      <span>可验证假设</span>
+                      <strong>{card.title}</strong>
+                    </div>
+                    <p>{card.hypothesis}</p>
+                    <dl>
+                      <div>
+                        <dt>改造动作</dt>
+                        <dd>{card.action}</dd>
+                      </div>
+                      <div>
+                        <dt>条件/设备</dt>
+                        <dd>{card.setup.join("、")}</dd>
+                      </div>
+                      <div>
+                        <dt>测试步骤</dt>
+                        <dd>{card.steps.join("；")}</dd>
+                      </div>
+                      <div>
+                        <dt>记录指标</dt>
+                        <dd>{card.metrics.join("、")}</dd>
+                      </div>
+                      <div>
+                        <dt>通过标准</dt>
+                        <dd>{card.passGate}</dd>
+                      </div>
+                      <div>
+                        <dt>失败后</dt>
+                        <dd>{card.failNext}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <details className="advanced-disclosure">
+              <summary>
+                <BookOpen size={19} />
+                <span>ima 知识增强</span>
+                <strong>{knowledgeFindings.length ? `${knowledgeFindings.length} 条知识点` : "可选配置"}</strong>
+              </summary>
 
             <section className="knowledge-panel">
               <div className="section-title">
@@ -1704,6 +1780,14 @@ export function App() {
                 用 ima 知识增强分析
               </button>
             </section>
+            </details>
+
+            <details className="advanced-disclosure">
+              <summary>
+                <Layers3 size={19} />
+                <span>推导过程与高级设置</span>
+                <strong>矛盾、资源、原理、报告</strong>
+              </summary>
 
             <section className="decomposition-panel">
               <div className="section-title">
@@ -1901,75 +1985,6 @@ export function App() {
               </div>
             </section>
 
-            <section className="decision-panel">
-              <div className="section-title">
-                <GitBranch size={19} />
-                <h2>V7 决策矩阵</h2>
-              </div>
-              <div className="decision-grid">
-                {rankedExperiments.map((card, index) => (
-                  <article className="decision-card" key={card.title}>
-                    <div className="decision-rank">{index + 1}</div>
-                    <div>
-                      <strong>{card.title}</strong>
-                      <span>{card.hypothesis}</span>
-                    </div>
-                    <div className="decision-scores">
-                      <b>收益 {card.scores.benefit}</b>
-                      <b>成本 {card.scores.cost}</b>
-                      <b>风险 {card.scores.risk}</b>
-                      <b>速度 {card.scores.speed}</b>
-                      <b>优先级 {card.scores.priority}</b>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="experiment-panel">
-              <div className="section-title">
-                <Clock3 size={19} />
-                <h2>第一轮实验卡</h2>
-              </div>
-              <div className="experiment-grid">
-                {rankedExperiments.map((card) => (
-                  <article className="experiment-card" key={card.title}>
-                    <div className="solution-head">
-                      <span>可验证假设</span>
-                      <strong>{card.title}</strong>
-                    </div>
-                    <p>{card.hypothesis}</p>
-                    <dl>
-                      <div>
-                        <dt>改造动作</dt>
-                        <dd>{card.action}</dd>
-                      </div>
-                      <div>
-                        <dt>条件/设备</dt>
-                        <dd>{card.setup.join("、")}</dd>
-                      </div>
-                      <div>
-                        <dt>测试步骤</dt>
-                        <dd>{card.steps.join("；")}</dd>
-                      </div>
-                      <div>
-                        <dt>记录指标</dt>
-                        <dd>{card.metrics.join("、")}</dd>
-                      </div>
-                      <div>
-                        <dt>通过标准</dt>
-                        <dd>{card.passGate}</dd>
-                      </div>
-                      <div>
-                        <dt>失败后</dt>
-                        <dd>{card.failNext}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))}
-              </div>
-            </section>
-
             <section className="analysis-path" aria-label="分析图谱">
               <div className="section-title">
                 <GitBranch size={19} />
@@ -1977,6 +1992,7 @@ export function App() {
               </div>
               <AnalysisGraph item={selectedCase} selectedPrinciples={selectedPrinciples} />
             </section>
+            </details>
 
             <section className="next-step">
               <Lightbulb size={20} />
