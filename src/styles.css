@@ -415,6 +415,8 @@ dd {
 .contradiction-panel,
 .resource-panel,
 .possibility-panel,
+.decision-panel,
+.experiment-panel,
 .analysis-path {
   margin-top: 24px;
 }
@@ -428,6 +430,8 @@ dd {
 .contradiction-panel,
 .resource-panel,
 .possibility-panel,
+.decision-panel,
+.experiment-panel,
 .graph-card {
   border: 1px solid #d5e2df;
   border-radius: 8px;
@@ -828,6 +832,95 @@ dd {
   font-weight: 900;
 }
 
+.decision-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.decision-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(220px, 0.7fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #d4dfdc;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.decision-rank {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 999px;
+  background: #0f4c45;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.decision-card strong {
+  display: block;
+  color: #10211f;
+  margin-bottom: 6px;
+}
+
+.decision-card span {
+  color: #526965;
+  line-height: 1.45;
+}
+
+.decision-scores {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.decision-scores b {
+  border-radius: 8px;
+  padding: 8px;
+  background: #eef5f3;
+  color: #174c46;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.experiment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.experiment-card {
+  align-content: start;
+}
+
+.experiment-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.experiment-card dl div {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  border-top: 1px solid #e1ebe8;
+  padding-top: 8px;
+}
+
+.experiment-card dt {
+  color: #607772;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.experiment-card dd {
+  color: #334844;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .graph-card {
   overflow: hidden;
 }
@@ -969,11 +1062,20 @@ dd {
   .diagnostic-list,
   .resource-grid,
   .solution-grid,
+  .experiment-grid,
   .knowledge-summary,
   .api-config-grid,
   .structured-knowledge,
   .engine-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .decision-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .decision-scores {
+    grid-column: 1 / -1;
   }
 }
 
@@ -993,11 +1095,21 @@ dd {
   .diagnostic-list,
   .resource-grid,
   .solution-grid,
+  .experiment-grid,
   .knowledge-summary,
   .api-config-grid,
   .structured-knowledge,
   .engine-grid {
     grid-template-columns: 1fr;
+  }
+
+  .decision-card,
+  .experiment-card dl div {
+    grid-template-columns: 1fr;
+  }
+
+  .decision-scores {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .workflow {

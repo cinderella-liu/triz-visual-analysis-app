@@ -95,6 +95,24 @@ type DiagnosticQuestion = {
   example: string;
 };
 
+type ExperimentCard = {
+  title: string;
+  hypothesis: string;
+  action: string;
+  setup: string[];
+  steps: string[];
+  metrics: string[];
+  passGate: string;
+  failNext: string;
+  scores: {
+    benefit: number;
+    cost: number;
+    risk: number;
+    speed: number;
+    priority: number;
+  };
+};
+
 type ImaQuery = {
   label: string;
   query: string;
@@ -1117,6 +1135,60 @@ function buildDecisionSummary(concepts: SolutionConcept[]) {
   return `优先验证「${best.title}」：收益/代价比最高，适合作为第一轮工程实验。`;
 }
 
+function buildExperimentCards(item: TrizCase, concepts: SolutionConcept[]): ExperimentCard[] {
+  return concepts.map((concept) => {
+    const metrics = concept.metrics?.length ? concept.metrics : buildConcreteMetrics(item);
+    const speed = Math.max(1, 6 - concept.effort);
+    const risk = concept.effort >= 4 ? 4 : concept.impact >= 5 ? 3 : 2;
+    const priority = concept.impact * 2 + speed - concept.effort - risk;
+
+    return {
+      title: concept.title,
+      hypothesis: buildHypothesis(item, concept),
+      action: concept.engineeringMove,
+      setup: buildExperimentSetup(item, concept),
+      steps: concept.implementationSteps?.length ? concept.implementationSteps : buildConcreteSteps(item, concept.title),
+      metrics,
+      passGate: concept.decisionGate ?? buildDecisionGate(item, concept),
+      failNext: buildFailureNextStep(concept),
+      scores: {
+        benefit: concept.impact,
+        cost: concept.effort,
+        risk,
+        speed,
+        priority,
+      },
+    };
+  });
+}
+
+function buildHypothesis(item: TrizCase, concept: SolutionConcept) {
+  const goal = item.goal || knownParameterName(item.improvingParameter, "目标指标");
+  const constraint = item.constraint || knownParameterName(item.worseningParameter, "约束指标");
+  if (isInertialPrecisionCase(item)) {
+    if (concept.title.includes("误差建模")) return "如果主要误差具有稳定性和重复性，则离线标定 + 在线补偿可以在不增加 IMU 体积的情况下提升精度。";
+    if (concept.title.includes("阵列")) return "如果随机噪声是主要限制，则多个小型 MEMS 器件的阵列融合可以用统计平均换取精度提升。";
+    if (concept.title.includes("自校准")) return "如果驱动轴/检测轴非对称导致漂移，则周期性模态切换可降低零偏并改善标度因数线性度。";
+    if (concept.title.includes("外部参考")) return "如果纯惯导误差随时间发散，则引入外部参考并在线估计状态量可以压制漂移。";
+  }
+  return `如果采用「${concept.title}」，则「${goal}」会改善，同时「${constraint}」不会超过可接受恶化范围。`;
+}
+
+function buildExperimentSetup(item: TrizCase, concept: SolutionConcept) {
+  if (isInertialPrecisionCase(item)) {
+    return ["被测 IMU/惯性器件", "静基座采集环境", "温度记录", "三轴转台或参考导航源", "数据记录与 Allan 方差分析脚本"];
+  }
+  if (concept.title.includes("反馈")) return ["状态采集日志", "判断阈值", "A/B 对照样本", "异常记录表"];
+  if (concept.title.includes("动态")) return ["场景样本", "多档策略配置", "切换日志", "稳定性观测表"];
+  return ["最小样机或流程模拟", "基线数据", "对照组", "指标记录表"];
+}
+
+function buildFailureNextStep(concept: SolutionConcept) {
+  if (concept.risk.includes("失配") || concept.risk.includes("不准")) return "先扩大标定样本和工况覆盖，确认模型边界，再决定是否换技术路线。";
+  if (concept.effort >= 4) return "若首轮收益不足，暂停继续投入，优先验证低成本替代方案。";
+  return "若未达门槛，复盘指标口径和失败样本，再调整假设或切换到下一优先级方案。";
+}
+
 function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
   const improving = knownParameterName(item.improvingParameter, item.goal || "待改善参数");
   const worsening = knownParameterName(item.worseningParameter, item.constraint || "可能恶化参数");
@@ -1128,6 +1200,7 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
   const contradictionCandidates = buildContradictionCandidates(item);
   const resources = buildResourceInventory(item);
   const concepts = buildSolutionConcepts(item, activePrinciples);
+  const experimentCards = buildExperimentCards(item, concepts);
   const principleLines = activePrinciples.map(
     (principle, index) => `${index + 1}. ${principle.name}：${principle.action}`,
   );
@@ -1172,6 +1245,20 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
     "- 最小实验：先做一个低成本原型或流程模拟，用前后对比数据判断方案是否值得继续。",
     `- 首选实验：${buildDecisionSummary(concepts)}`,
     "- 决策标准：只有当目标收益大于新增复杂度、成本和风险时，才进入下一轮方案深化。",
+    "",
+    "七、V7 决策工作流",
+    ...experimentCards.map(
+      (card, index) =>
+        [
+          `${index + 1}. ${card.title}`,
+          `   - 可验证假设：${card.hypothesis}`,
+          `   - 实验设备/条件：${card.setup.join("、")}`,
+          `   - 指标：${card.metrics.join("、")}`,
+          `   - 通过标准：${card.passGate}`,
+          `   - 失败后动作：${card.failNext}`,
+          `   - 优先级：${card.scores.priority}（收益 ${card.scores.benefit}/成本 ${card.scores.cost}/风险 ${card.scores.risk}/速度 ${card.scores.speed}）`,
+        ].join("\n"),
+    ),
   ].join("\n");
 }
 
@@ -1232,6 +1319,8 @@ export function App() {
   const contradictionCandidates = selectedCase ? buildContradictionCandidates(selectedCase) : [];
   const resources = selectedCase ? buildResourceInventory(selectedCase) : [];
   const solutionConcepts = selectedCase ? buildSolutionConcepts(selectedCase, activePrinciples) : [];
+  const experimentCards = selectedCase ? buildExperimentCards(selectedCase, solutionConcepts) : [];
+  const rankedExperiments = [...experimentCards].sort((a, b) => b.scores.priority - a.scores.priority);
   const decisionSummary = buildDecisionSummary(solutionConcepts);
   const diagnosticQuestions = selectedCase ? buildDiagnosticQuestions(selectedCase) : [];
   const imaQueries = selectedCase ? buildImaQueries(selectedCase) : [];
@@ -1387,7 +1476,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V6.4 ima 关键词检索</p>
+            <p className="eyebrow">TRIZ V7 决策工作流</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -1807,6 +1896,75 @@ export function App() {
                       <span>收益 {concept.impact}/5</span>
                       <span>难度 {concept.effort}/5</span>
                     </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="decision-panel">
+              <div className="section-title">
+                <GitBranch size={19} />
+                <h2>V7 决策矩阵</h2>
+              </div>
+              <div className="decision-grid">
+                {rankedExperiments.map((card, index) => (
+                  <article className="decision-card" key={card.title}>
+                    <div className="decision-rank">{index + 1}</div>
+                    <div>
+                      <strong>{card.title}</strong>
+                      <span>{card.hypothesis}</span>
+                    </div>
+                    <div className="decision-scores">
+                      <b>收益 {card.scores.benefit}</b>
+                      <b>成本 {card.scores.cost}</b>
+                      <b>风险 {card.scores.risk}</b>
+                      <b>速度 {card.scores.speed}</b>
+                      <b>优先级 {card.scores.priority}</b>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="experiment-panel">
+              <div className="section-title">
+                <Clock3 size={19} />
+                <h2>第一轮实验卡</h2>
+              </div>
+              <div className="experiment-grid">
+                {rankedExperiments.map((card) => (
+                  <article className="experiment-card" key={card.title}>
+                    <div className="solution-head">
+                      <span>可验证假设</span>
+                      <strong>{card.title}</strong>
+                    </div>
+                    <p>{card.hypothesis}</p>
+                    <dl>
+                      <div>
+                        <dt>改造动作</dt>
+                        <dd>{card.action}</dd>
+                      </div>
+                      <div>
+                        <dt>条件/设备</dt>
+                        <dd>{card.setup.join("、")}</dd>
+                      </div>
+                      <div>
+                        <dt>测试步骤</dt>
+                        <dd>{card.steps.join("；")}</dd>
+                      </div>
+                      <div>
+                        <dt>记录指标</dt>
+                        <dd>{card.metrics.join("、")}</dd>
+                      </div>
+                      <div>
+                        <dt>通过标准</dt>
+                        <dd>{card.passGate}</dd>
+                      </div>
+                      <div>
+                        <dt>失败后</dt>
+                        <dd>{card.failNext}</dd>
+                      </div>
+                    </dl>
                   </article>
                 ))}
               </div>
