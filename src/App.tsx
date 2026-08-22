@@ -69,6 +69,19 @@ type ContradictionCandidate = {
   why: string;
 };
 
+type EngineeringContradiction = {
+  title: string;
+  improvingParameter: string;
+  worseningParameter: string;
+  statement: string;
+  reason: string;
+  trizQuestion: string;
+  firstMove: string;
+  principleIds: number[];
+  priority: number;
+  confidence: "高" | "中" | "低";
+};
+
 type ResourceItem = {
   category: string;
   resource: string;
@@ -514,6 +527,211 @@ function buildContradictionCandidates(item: TrizCase): ContradictionCandidate[] 
       why: "很多软件、硬件和流程系统的问题，本质是控制闭环不足，而不是功能数量不足。",
     },
   ];
+}
+
+function buildEngineeringContradictions(item: TrizCase): EngineeringContradiction[] {
+  const system = item.systemName || "当前系统";
+  const goal = item.goal || knownParameterName(item.improvingParameter, "目标效果");
+  const constraint = item.constraint || knownParameterName(item.worseningParameter, "关键约束");
+  const improving = item.improvingParameter || inferImprovingParameter(item);
+  const focus = inferProblemFocus(item);
+
+  if (focus === "inertialPrecision") {
+    return [
+      {
+        title: "精度提升 vs 体积不增加",
+        improvingParameter: "accuracy",
+        worseningParameter: "size",
+        statement: "要提高惯性测量/定位精度，传统路径会加大谐振子、光纤环或器件结构；但系统体积不能增加。",
+        reason: "这是该类问题的主矛盾，决定方案是否要从硬件尺度转向补偿、融合和自校准。",
+        trizQuestion: "怎样让精度提高，同时不通过增大物理尺寸来换取精度？",
+        firstMove: "先把精度提升从“加大器件”翻译成“误差建模、软件补偿、阵列融合、自校准”四条候选路线。",
+        principleIds: [2, 1, 23, 28],
+        priority: 5,
+        confidence: "高",
+      },
+      {
+        title: "精度提升 vs 成本不增加",
+        improvingParameter: "accuracy",
+        worseningParameter: "cost",
+        statement: "要提高精度通常需要更高等级器件、更复杂工艺和更长标定流程；但成本不能明显上升。",
+        reason: "它决定首轮方案应优先验证软件补偿、工艺复用和低成本冗余，而不是直接换高端器件。",
+        trizQuestion: "怎样用已有器件、数据和标定能力提升精度，而不是购买更贵硬件？",
+        firstMove: "拆分成本来源：器件、装配、标定、计算和维护，优先选择不增加 BOM 的动作。",
+        principleIds: [2, 10, 25, 40],
+        priority: 4,
+        confidence: "高",
+      },
+      {
+        title: "精度提升 vs 实时性不下降",
+        improvingParameter: "accuracy",
+        worseningParameter: "speed",
+        statement: "滤波、补偿和自校准能提高精度，但会增加计算延迟或占用测量时间窗口。",
+        reason: "它决定补偿算法是否能进入真实工作流，而不是只在离线数据上好看。",
+        trizQuestion: "怎样把高成本计算前置、分时或按需触发，同时保持实时输出？",
+        firstMove: "把补偿拆成离线标定、在线轻量修正和低频自校准三层。",
+        principleIds: [10, 15, 19, 23],
+        priority: 4,
+        confidence: "中",
+      },
+      {
+        title: "小型化 vs 稳定性不下降",
+        improvingParameter: "size",
+        worseningParameter: "reliability",
+        statement: "器件小型化会带来 Q 值下降、随机漂移增大、温度敏感和装配误差放大。",
+        reason: "它提醒方案不能只看尺寸，还要验证稳定性、漂移和全温表现。",
+        trizQuestion: "怎样缩小结构，同时让误差仍然稳定、可建模、可补偿？",
+        firstMove: "把稳定性指标加入实验卡：BI、ARW、VRW、温度灵敏度和逐次启动重复性。",
+        principleIds: [3, 15, 23, 25],
+        priority: 3,
+        confidence: "高",
+      },
+    ];
+  }
+
+  const baseWorsening = item.worseningParameter || inferWorseningParameter(item);
+  const candidates: EngineeringContradiction[] = [
+    {
+      title: `${knownParameterName(improving, goal)}提升 vs ${knownParameterName(baseWorsening, constraint)}不恶化`,
+      improvingParameter: improving,
+      worseningParameter: baseWorsening,
+      statement: `为了让${system}的「${goal}」变好，通常要增加结构、能量、算法、流程或人工干预；但这会冲击「${constraint}」。`,
+      reason: "这是从原始问题直接翻译出的主工程矛盾，适合作为第一轮 TRIZ 分析入口。",
+      trizQuestion: `怎样让「${goal}」改善，同时不让「${constraint}」恶化？`,
+      firstMove: "先列出造成目标改善的常规手段，再逐一标出它们带来的副作用。",
+      principleIds: recommendPrinciples({ ...item, improvingParameter: improving, worseningParameter: baseWorsening }).slice(0, 4).map((principle) => principle.id),
+      priority: 5,
+      confidence: item.goal && item.constraint ? "高" : "中",
+    },
+  ];
+
+  const focusContradictions: Record<string, EngineeringContradiction> = {
+    energy: {
+      title: "续航/功耗优化 vs 性能体验不下降",
+      improvingParameter: "energy",
+      worseningParameter: "comfort",
+      statement: "降低功耗常会牺牲响应速度、刷新频率、算力或功能可用性。",
+      reason: "能耗问题经常不是单纯省电，而是节能策略和用户体验之间的矛盾。",
+      trizQuestion: "怎样只在必要时消耗能量，而不是持续付出峰值功耗？",
+      firstMove: "把耗能动作分成持续、周期、触发、可延后三类，优先改持续耗能项。",
+      principleIds: [19, 10, 15, 23],
+      priority: 4,
+      confidence: "中",
+    },
+    speed: {
+      title: "响应速度提升 vs 可靠性/准确性不下降",
+      improvingParameter: "speed",
+      worseningParameter: "reliability",
+      statement: "缩短流程、减少检查或提前返回结果，会增加误判、失败重试或异常遗漏。",
+      reason: "速度问题的关键常在关键路径和校验路径之间取舍。",
+      trizQuestion: "怎样让关键路径变短，同时保留必要校验和恢复能力？",
+      firstMove: "把流程拆成必须同步、可异步、可预处理、可缓存四类步骤。",
+      principleIds: [10, 1, 23, 24],
+      priority: 4,
+      confidence: "中",
+    },
+    accuracy: {
+      title: "准确性提升 vs 复杂度不增加",
+      improvingParameter: "accuracy",
+      worseningParameter: "complexity",
+      statement: "提升准确性通常需要更多传感、更多规则、更多数据或更多人工复核；但系统会变复杂。",
+      reason: "准确性问题需要避免把复杂度直接转嫁给用户或维护人员。",
+      trizQuestion: "怎样把准确性提升放到模型、反馈和校准层，而不是堆更多人工流程？",
+      firstMove: "先识别误差来源，再决定用标定、反馈、二次判断还是数据补强。",
+      principleIds: [2, 23, 10, 28],
+      priority: 4,
+      confidence: "中",
+    },
+    reliability: {
+      title: "可靠性提升 vs 成本/复杂度不增加",
+      improvingParameter: "reliability",
+      worseningParameter: "cost",
+      statement: "增加冗余、监控和保护能提升可靠性，但会增加成本、体积、开发和维护复杂度。",
+      reason: "可靠性设计要区分关键故障和低价值冗余，避免全局堆料。",
+      trizQuestion: "怎样只对关键失效路径增加保护，而不全系统增加成本？",
+      firstMove: "先做故障模式清单，按发生频率和影响范围排序。",
+      principleIds: [3, 23, 25, 1],
+      priority: 4,
+      confidence: "中",
+    },
+    structure: {
+      title: "小型化/轻量化 vs 强度/散热不下降",
+      improvingParameter: "size",
+      worseningParameter: "reliability",
+      statement: "缩小尺寸或减重会削弱强度、散热、装配空间或维护可达性。",
+      reason: "结构问题通常需要把体积、重量、强度、热和装配一起看。",
+      trizQuestion: "怎样让结构更小更轻，同时关键部位仍保留强度和散热余量？",
+      firstMove: "找出占空间最大的部件和承力/散热点，区分可削减区和不可削减区。",
+      principleIds: [1, 3, 40, 15],
+      priority: 4,
+      confidence: "中",
+    },
+    cost: {
+      title: "成本降低 vs 性能/可靠性不下降",
+      improvingParameter: "cost",
+      worseningParameter: "reliability",
+      statement: "降成本容易削弱材料、工艺、测试和维护质量，从而影响性能或可靠性。",
+      reason: "成本优化应先找低价值成本，而不是削弱关键功能。",
+      trizQuestion: "怎样降低非关键成本，同时保留用户感知价值和关键可靠性？",
+      firstMove: "拆分 BOM、工时、测试、维护和返修成本，先处理高成本低价值项。",
+      principleIds: [2, 1, 10, 40],
+      priority: 4,
+      confidence: "中",
+    },
+    general: {
+      title: "自动化提升 vs 可控性不下降",
+      improvingParameter: "automation",
+      worseningParameter: "information",
+      statement: "增加自动化能减少人工操作，但可能降低透明度、可解释性和异常可控性。",
+      reason: "许多复杂系统的问题不是缺功能，而是缺少可解释的控制闭环。",
+      trizQuestion: "怎样让系统自动工作，同时让用户知道它为什么这么做、何时需要接管？",
+      firstMove: "加入状态反馈、决策理由和人工接管条件。",
+      principleIds: [23, 25, 24, 15],
+      priority: 3,
+      confidence: "低",
+    },
+  };
+
+  const focusCard = focusContradictions[focus] ?? focusContradictions.general;
+  if (focusCard.title !== candidates[0].title) candidates.push(focusCard);
+
+  candidates.push({
+    title: "方案增强 vs 验证成本不增加",
+    improvingParameter: improving,
+    worseningParameter: "cost",
+    statement: "越想把方案做完整，越需要更多样机、测试、数据和评审；但早期验证成本不能失控。",
+    reason: "它把分析结果落到实验策略上，防止从概念直接跳到大规模开发。",
+    trizQuestion: "怎样用最小实验验证最大风险，而不是一次性验证全部功能？",
+    firstMove: "把方案拆成假设、动作、指标、通过标准和失败后动作。",
+    principleIds: [10, 1, 23, 25],
+    priority: 3,
+    confidence: "高",
+  });
+
+  return candidates.slice(0, 5);
+}
+
+function inferImprovingParameter(item: TrizCase) {
+  const focus = inferProblemFocus(item);
+  if (focus === "energy") return "energy";
+  if (focus === "speed") return "speed";
+  if (focus === "accuracy") return "accuracy";
+  if (focus === "reliability") return "reliability";
+  if (focus === "structure") return "size";
+  if (focus === "cost") return "cost";
+  return "automation";
+}
+
+function inferWorseningParameter(item: TrizCase) {
+  const text = [item.description, item.goal, item.constraint, item.domain, item.systemName].join(" ").toLowerCase();
+  if (["体积", "尺寸", "厚度", "空间", "size"].some((word) => text.includes(word))) return "size";
+  if (["重量", "轻", "weight"].some((word) => text.includes(word))) return "weight";
+  if (["成本", "预算", "贵", "cost"].some((word) => text.includes(word))) return "cost";
+  if (["功耗", "续航", "电池", "energy"].some((word) => text.includes(word))) return "energy";
+  if (["延迟", "实时", "响应", "speed"].some((word) => text.includes(word))) return "speed";
+  if (["复杂", "维护", "学习", "complex"].some((word) => text.includes(word))) return "complexity";
+  if (["稳定", "可靠", "故障", "reliability"].some((word) => text.includes(word))) return "reliability";
+  return "cost";
 }
 
 function buildResourceInventory(item: TrizCase): ResourceItem[] {
@@ -984,18 +1202,18 @@ function generateKnowledgeEnhancedPlan(item: TrizCase, activePrinciples: Princip
   return [
     baseReport,
     "",
-    "七、ima 知识库增强",
+    "九、ima 知识库增强",
     findings.length
       ? `- 已提取知识依据：${findings.join("；")}`
       : "- 当前还没有粘贴 ima 返回内容；请先用下方检索问题去 ima knowledge-base 查询，再把结果粘贴回来。",
     "",
-    "八、结构化知识摘要",
+    "十、结构化知识摘要",
     formatStructuredKnowledge(structuredKnowledge),
     "",
-    "九、建议检索问题",
+    "十一、建议检索问题",
     ...queries.map((item, index) => `- ${index + 1}. ${item.query}`),
     "",
-    "十、知识到方案的落地映射",
+    "十二、知识到方案的落地映射",
     ...concepts.map((concept, index) => `- ${index + 1}. ${concept.title}：${buildKnowledgeUse(item, concept)}`),
   ].join("\n");
 }
@@ -1197,6 +1415,7 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
       ? `希望改善「${improving}」，但可能恶化「${worsening}」。`
       : item.physicalContradiction || `同一系统同时需要满足互相冲突的状态。`;
   const breakdown = buildProblemBreakdown(item);
+  const engineeringContradictions = buildEngineeringContradictions(item);
   const contradictionCandidates = buildContradictionCandidates(item);
   const resources = buildResourceInventory(item);
   const concepts = buildSolutionConcepts(item, activePrinciples);
@@ -1211,20 +1430,31 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
     "一、问题拆解",
     ...breakdown.map((part) => `- ${part.label}：${part.value}。${part.insight}`),
     "",
-    "二、矛盾推导",
+    "二、V8 结构化工程矛盾清单",
+    ...engineeringContradictions.map(
+      (candidate, index) =>
+        [
+          `- ${index + 1}. ${candidate.title}（优先级 ${candidate.priority}，置信度 ${candidate.confidence}）`,
+          `  - 工程表达：${candidate.statement}`,
+          `  - TRIZ 问法：${candidate.trizQuestion}`,
+          `  - 第一动作：${candidate.firstMove}`,
+        ].join("\n"),
+    ),
+    "",
+    "三、矛盾推导",
     `- 表层问题：${item.description || "待补充问题描述"}`,
     `- 技术矛盾：${contradiction}`,
     `- 物理矛盾：${item.physicalContradiction || `系统既要提升「${improving}」，又不能付出「${worsening}」代价。`}`,
     `- TRIZ 关键问法：怎样让「${improving}」变好，同时不让「${worsening}」变差？`,
     ...contradictionCandidates.map((candidate, index) => `- 候选 ${index + 1}（${candidate.type}）：${candidate.statement} ${candidate.why}`),
     "",
-    "三、资源盘点",
+    "四、资源盘点",
     ...resources.map((resource) => `- ${resource.category}：${resource.resource}。${resource.move}`),
     "",
-    "四、可用发明原理",
+    "五、可用发明原理",
     ...principleLines,
     "",
-    "五、方案候选",
+    "六、方案候选",
     ...concepts.map(
       (concept, index) =>
         [
@@ -1239,14 +1469,14 @@ function generateAnalysisPlan(item: TrizCase, activePrinciples: Principle[]) {
         ].join("\n"),
     ),
     "",
-    "六、验证路径",
+    "七、验证路径",
     `- 目标指标：验证「${improving}」是否显著改善。`,
     `- 副作用指标：验证「${worsening}」是否没有明显恶化。`,
     "- 最小实验：先做一个低成本原型或流程模拟，用前后对比数据判断方案是否值得继续。",
     `- 首选实验：${buildDecisionSummary(concepts)}`,
     "- 决策标准：只有当目标收益大于新增复杂度、成本和风险时，才进入下一轮方案深化。",
     "",
-    "七、V7 决策工作流",
+    "八、V8 决策工作流",
     ...experimentCards.map(
       (card, index) =>
         [
@@ -1315,6 +1545,7 @@ export function App() {
     ? principles.filter((principle) => selectedCase.selectedPrincipleIds.includes(principle.id))
     : [];
   const breakdown = selectedCase ? buildProblemBreakdown(selectedCase) : [];
+  const engineeringContradictions = selectedCase ? buildEngineeringContradictions(selectedCase) : [];
   const activePrinciples = selectedPrinciples.length ? selectedPrinciples : recommended.slice(0, 3);
   const contradictionCandidates = selectedCase ? buildContradictionCandidates(selectedCase) : [];
   const resources = selectedCase ? buildResourceInventory(selectedCase) : [];
@@ -1419,6 +1650,29 @@ export function App() {
     });
   }
 
+  function focusEngineeringContradiction(contradiction: EngineeringContradiction) {
+    if (!selectedCase) return;
+    updateCase({
+      ...selectedCase,
+      contradictionType: "技术矛盾",
+      improvingParameter: contradiction.improvingParameter,
+      worseningParameter: contradiction.worseningParameter,
+      physicalContradiction: contradiction.trizQuestion,
+      selectedPrincipleIds: contradiction.principleIds,
+      solutionHypothesis: generateAnalysisPlan(
+        {
+          ...selectedCase,
+          contradictionType: "技术矛盾",
+          improvingParameter: contradiction.improvingParameter,
+          worseningParameter: contradiction.worseningParameter,
+          physicalContradiction: contradiction.trizQuestion,
+          selectedPrincipleIds: contradiction.principleIds,
+        },
+        principles.filter((principle) => contradiction.principleIds.includes(principle.id)),
+      ),
+    });
+  }
+
   function handleGenerateImaQueries() {
     if (!selectedCase) return;
     updateCase({
@@ -1476,7 +1730,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">TRIZ V7.1 界面收敛版</p>
+            <p className="eyebrow">TRIZ V8 矛盾翻译器</p>
             <h1>分析收件箱</h1>
           </div>
           <button className="icon-button" aria-label="打开方法库">
@@ -1585,7 +1839,7 @@ export function App() {
                 </div>
                 <div>
                   <span>分析输出</span>
-                  <strong>决策矩阵 + 第一轮实验卡</strong>
+                  <strong>工程矛盾清单 + 决策矩阵 + 第一轮实验卡</strong>
                 </div>
               </div>
               <button className="primary-button full-width" type="button" onClick={handleGeneratePlan}>
@@ -1609,10 +1863,61 @@ export function App() {
               </div>
             </section>
 
+            <section className="translator-panel">
+              <div className="section-title">
+                <GitBranch size={19} />
+                <h2>V8 矛盾翻译器</h2>
+              </div>
+              <div className="translator-intro">
+                <strong>把非结构化问题翻译成可逐一分析的工程矛盾清单。</strong>
+                <span>先选最关键的 1 个矛盾，再进入 TRIZ 原理、决策矩阵和第一轮实验。</span>
+              </div>
+              <div className="contradiction-translation-list">
+                {engineeringContradictions.map((contradiction, index) => (
+                  <article className="translation-card" key={contradiction.title}>
+                    <div className="translation-head">
+                      <span>矛盾 {index + 1}</span>
+                      <strong>{contradiction.title}</strong>
+                      <b>优先级 {contradiction.priority}</b>
+                    </div>
+                    <p>{contradiction.statement}</p>
+                    <dl>
+                      <div>
+                        <dt>TRIZ 问法</dt>
+                        <dd>{contradiction.trizQuestion}</dd>
+                      </div>
+                      <div>
+                        <dt>为什么重要</dt>
+                        <dd>{contradiction.reason}</dd>
+                      </div>
+                      <div>
+                        <dt>第一步</dt>
+                        <dd>{contradiction.firstMove}</dd>
+                      </div>
+                      <div>
+                        <dt>推荐原理</dt>
+                        <dd>
+                          {contradiction.principleIds
+                            .map((id) => principles.find((principle) => principle.id === id))
+                            .filter(Boolean)
+                            .map((principle) => `${principle?.id}. ${principle?.name}`)
+                            .join("、")}
+                        </dd>
+                      </div>
+                    </dl>
+                    <button className="ghost-button full-width" type="button" onClick={() => focusEngineeringContradiction(contradiction)}>
+                      <ArrowRight size={18} />
+                      作为核心矛盾分析
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="decision-panel">
               <div className="section-title">
                 <GitBranch size={19} />
-                <h2>V7.1 决策矩阵</h2>
+                <h2>V8 决策矩阵</h2>
               </div>
               <div className="decision-grid">
                 {rankedExperiments.map((card, index) => (
